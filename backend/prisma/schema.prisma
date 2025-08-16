@@ -1,0 +1,2102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- 1. CORE MODELS ----------
+model Company {
+  id                String   @id @default(cuid())
+  name              String
+  taxNumber         String   @unique
+  taxOffice         String
+  address           String // [cite: 2]
+  phone             String
+  email             String
+  logo              String?
+  website           String? // [cite: 3]
+
+  // E-Dönüşüm bilgileri
+  eArchiveUsername  String?
+  eArchivePassword  String? // encrypted // [cite: 4]
+  eInvoiceUsername  String?
+  eInvoicePassword  String? // encrypted // [cite: 5]
+
+  // SMS Provider bilgileri
+  smsProvider       String? // "netgsm", "twilio", etc. // [cite: 7]
+  smsApiKey         String? // encrypted // [cite: 8]
+  smsApiSecret      String? // encrypted // [cite: 9]
+  smsSenderName     String? // [cite: 10]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // soft delete // [cite: 11]
+
+  branches          Branch[]
+  users             User[]
+  products          Product[]
+  categories        Category[]
+  taxes             Tax[]
+  paymentMethods    PaymentMethod[]
+  onlinePlatforms   OnlinePlatform[]
+  notificationTemplates NotificationTemplate[]
+  campaigns         Campaign[]
+  tasks Task[]
+}
+
+model Branch {
+  id                String   @id @default(cuid()) // [cite: 12]
+  companyId         String
+  code              String   // e.g. "IST01" // [cite: 13]
+  name              String
+  address           String
+  phone             String
+  email             String? // [cite: 14]
+  latitude          Float? // [cite: 15]
+  longitude         Float? // [cite: 16]
+  // network sync
+  serverIp          String? // [cite: 17]
+  serverPort        Int? // [cite: 18]
+  isMainBranch      Boolean  @default(false)
+
+  // working hours
+  openingTime       String? // [cite: 19]
+  closingTime       String? // [cite: 20]
+  workingDays       Int[]    @default([1,2,3,4,5,6,7]) // 1=Monday, 7=Sunday
+
+  // Mali bilgiler
+  cashRegisterId    String? // ÖKC cihaz no // [cite: 21]
+  posTerminalId     String? // EFT-POS terminal ID // [cite: 22]
+
+  active            Boolean  @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // soft delete // [cite: 23]
+
+  company           Company   @relation(fields: [companyId], references: [id])
+  users             User[]
+  tables            Table[]
+  tableAreas        TableArea[]
+  orders            Order[]
+  cashMovements     CashMovement[]
+  stockMovements    StockMovement[]
+  priceOverrides    PriceOverride[]
+  courierLocations  CourierLocation[]
+  printers          Printer[] // [cite: 24]
+  reservations      Reservation[]
+  qrMenus           QRMenu[]
+  dailyReports      DailyReport[]
+  tasks Task[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+}
+
+model SyncLog {
+  id                String   @id @default(cuid())
+  branchId          String
+  syncType          String   // FULL, PARTIAL
+  direction         String   // UPLOAD, DOWNLOAD
+  recordCount       Int
+  successCount      Int
+  failureCount      Int
+  startedAt         DateTime
+  completedAt       DateTime?
+  error             String?
+  details           Json?
+
+  @@index([branchId])
+  @@index([startedAt])
+}
+
+// ---------- 2. USER & AUTH ----------
+model User {
+  id                String   @id @default(cuid())
+  companyId         String
+  branchId          String? // null = tüm şubelere erişim // [cite: 25]
+  username          String   @unique
+  password          String   // hashed
+  pin               String? // quick-login pin (hashed) // [cite: 26]
+  firstName         String // [cite: 27]
+  lastName          String // [cite: 28]
+  email             String? // [cite: 29]
+  phone             String? // [cite: 30]
+  avatar            String? // [cite: 31]
+  role              UserRole // [cite: 32]
+  permissions       Json? // Detaylı yetki matrisi // [cite: 33]
+
+  // Çalışan bilgileri
+  employeeCode      String? // [cite: 34]
+  hireDate          DateTime? // [cite: 35]
+  birthDate         DateTime? // [cite: 36]
+  nationalId        String? // [cite: 37]
+  // Kurye bilgileri
+  vehicleType       String? // "motorcycle", "bicycle", "car" // [cite: 38]
+  vehiclePlate      String? // [cite: 39]
+  active            Boolean   @default(true) // [cite: 40]
+  lastLoginAt       DateTime? // [cite: 41]
+  refreshToken      String? // JWT refresh token for session management
+  failedLoginCount  Int       @default(0) // [cite: 42]
+  lockedUntil       DateTime? // [cite: 43]
+  version           Int       @default(1) // optimistic locking // [cite: 44]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // soft delete // [cite: 45]
+
+  company           Company   @relation(fields: [companyId], references: [id])
+  branch            Branch? @relation(fields: [branchId], references: [id]) // [cite: 40]
+  orders            Order[]
+  courierOrders     Order[]   @relation("CourierOrder")
+  cashMovements     CashMovement[]
+  sessions          Session[]
+  logs              AuditLog[]
+  courierLocations  CourierLocation[]
+  clockRecords      ClockRecord[]
+  assignedTasks     Task[] @relation("UserAssignedTasks")
+  createdTasks      Task[] @relation("UserCreatedTasks")
+  orderLogs         OrderLog[] @relation("UserOrderLogs")
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([deletedAt])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  BRANCH_MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
+  REPORTER
+  COURIER
+  CUSTOMER_SERVICE // [cite: 46]
+}
+
+model Session { // [cite: 47]
+  id                String   @id @default(cuid())
+  userId            String
+  branchId          String? // [cite: 48]
+  token             String   @unique
+  deviceInfo        String? // [cite: 49]
+  ipAddress         String? // [cite: 50]
+  startedAt         DateTime  @default(now())
+  endedAt           DateTime? // [cite: 51]
+  lastActivityAt    DateTime  @default(now())
+
+  user              User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([token])
+}
+
+// Personel giriş/çıkış takibi
+model ClockRecord {
+  id                String   @id @default(cuid())
+  userId            String
+  branchId          String
+  
+  clockIn           DateTime // [cite: 52]
+  clockOut          DateTime? // [cite: 53]
+  breakStart        DateTime? // [cite: 54]
+  breakEnd          DateTime? // [cite: 55]
+  totalBreakMinutes Int      @default(0)
+  
+  user              User     @relation(fields: [userId], references: [id])
+  
+  @@index([userId, clockIn])
+}
+
+// ---------- 3. PRODUCT ----------
+model Category {
+  id                String   @id @default(cuid())
+  companyId         String
+  parentId          String? // [cite: 56]
+  name              String
+  description       String? // [cite: 57]
+  image             String? // [cite: 58]
+  color             String? // [cite: 59]
+  icon              String? // [cite: 60]
+  // KDS gösterimi
+  showInKitchen     Boolean  @default(true)
+  preparationTime   Int? // dakika // [cite: 61]
+
+  displayOrder      Int       @default(0)
+  active            Boolean   @default(true)
+  showInMenu        Boolean   @default(true) // QR menüde göster
+  
+  version           Int       @default(1) // optimistic locking
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt // [cite: 62]
+  deletedAt         DateTime? // soft delete // [cite: 63]
+
+  company           Company    @relation(fields: [companyId], references: [id])
+  parent            Category? @relation("CategoryHierarchy", fields: [parentId], references: [id]) // [cite: 64]
+  children          Category[] @relation("CategoryHierarchy")
+  products          Product[]
+  printerGroup      PrinterGroup? @relation(fields: [printerGroupId], references: [id]) // [cite: 65]
+  printerGroupId    String? // [cite: 66]
+  @@index([companyId])
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+model Product {
+  id                String   @id @default(cuid())
+  companyId         String
+  categoryId        String
+
+  code              String   // SKU
+  barcode           String? // EAN-13, QR, etc. // [cite: 67]
+  name              String // [cite: 68]
+  description       String? // [cite: 69]
+  shortDescription  String?  // QR menü için // [cite: 70]
+  image             String? // [cite: 71]
+  images            String[] // Çoklu resim desteği
+  
+  basePrice         Decimal  @db.Decimal(10, 2) // [cite: 72]
+  taxId             String
+
+  // Maliyet takibi
+  costPrice         Decimal? @db.Decimal(10, 2) // [cite: 73]
+  profitMargin      Decimal? @db.Decimal(5, 2) // [cite: 74]
+
+  trackStock        Boolean   @default(false) // [cite: 75]
+  unit              ProductUnit @default(PIECE)
+  criticalStock     Decimal? @db.Decimal(10, 3) // [cite: 76]
+
+  // Satış özellikleri
+  available         Boolean   @default(true) // [cite: 77]
+  sellable          Boolean   @default(true) // [cite: 78]
+  preparationTime   Int? // dakika // [cite: 79]
+  calories          Int? // Kalori bilgisi // [cite: 80]
+  allergens         String[]  // Alerjen bilgileri // [cite: 81]
+
+  hasVariants       Boolean   @default(false)
+  hasModifiers      Boolean   @default(false)
+
+  // QR menü özellikleri
+  showInMenu        Boolean   @default(true)
+  featured          Boolean   @default(false)
+  
+  displayOrder      Int       @default(0)
+  active            Boolean   @default(true) // [cite: 82]
+  version           Int       @default(1) // optimistic locking // [cite: 83]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // soft delete // [cite: 84]
+
+  syncId            String? @unique // [cite: 85]
+  lastSyncAt        DateTime? // [cite: 86]
+  company           Company   @relation(fields: [companyId], references: [id]) // [cite: 87]
+  category          Category  @relation(fields: [categoryId], references: [id])
+  tax               Tax       @relation(fields: [taxId], references: [id])
+
+  variants          ProductVariant[]
+  modifierGroups    ProductModifierGroup[]
+  recipes           Recipe[]
+  orderItems        OrderItem[] // [cite: 88]
+  stockMovements    StockMovement[]
+  priceOverrides    PriceOverride[]
+  inventoryItems    InventoryItem[]
+  comboItemsAsParent ComboItem[] @relation("ProductComboParent")
+  comboItemsAsChild ComboItem[] @relation("ProductComboChild")
+
+  onlineProductMappings OnlineProductMapping[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([categoryId])
+  @@index([barcode])
+  @@index([deletedAt])
+}
+
+enum ProductUnit {
+  PIECE
+  KG
+  GRAM
+  LITER
+  ML
+  PORTION
+  BOX
+  PACKAGE
+}
+
+model ProductVariant {
+  id                String   @id @default(cuid())
+  productId         String
+
+  name              String   // e.g. "Small", "Large" // [cite: 89]
+  code              String   // e.g. "S", "L" // [cite: 90]
+  sku               String? // [cite: 91]
+  barcode           String? // [cite: 92]
+  price             Decimal  @db.Decimal(10, 2) // [cite: 93]
+  costPrice         Decimal? @db.Decimal(10, 2) // [cite: 94]
+
+  displayOrder      Int       @default(0)
+  active            Boolean   @default(true)
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 95]
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Cascade) // [cite: 96]
+  orderItems        OrderItem[]
+  priceOverrides PriceOverride[]
+
+  @@index([productId])
+  @@unique([productId, sku]) // Düzeltme 3: SKU çakışmasını önle
+  @@unique([productId, barcode]) // Düzeltme 3: Barkod çakışmasını önle
+}
+
+// Kombo ürünler için
+model ComboItem {
+  id                String   @id @default(cuid())
+  parentProductId   String   // Ana kombo ürün
+  childProductId    String   // İçindeki ürün
+  quantity          Int      @default(1)
+  
+  parentProduct     Product  @relation("ProductComboParent", fields: [parentProductId], references: [id])
+  childProduct      Product  @relation("ProductComboChild", fields: [childProductId], references: [id])
+  
+  @@unique([parentProductId, childProductId])
+}
+
+model ModifierGroup {
+  id                String   @id @default(cuid())
+  name              String
+  description       String? // [cite: 98]
+  minSelection      Int       @default(0) // [cite: 99]
+  maxSelection      Int       @default(1) // [cite: 100]
+  required          Boolean   @default(false)
+  freeSelection     Int       @default(0) // İlk X seçim ücretsiz // [cite: 101]
+  
+  displayOrder      Int       @default(0)
+  active            Boolean   @default(true)
+  version           Int       @default(1) // [cite: 102]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 103]
+  modifiers         Modifier[]
+  products          ProductModifierGroup[]
+  @@index([deletedAt])
+}
+
+model Modifier {
+  id                String   @id @default(cuid())
+  groupId           String
+
+  name              String
+  price             Decimal   @db.Decimal(10, 2) @default(0)
+  maxQuantity       Int       @default(1) // [cite: 104]
+  inventoryItemId   String? // Stock impact // [cite: 105]
+  
+  displayOrder      Int       @default(0) // [cite: 106]
+  active            Boolean   @default(true)
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 107]
+  group             ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade) // [cite: 108]
+  inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id]) // [cite: 109]
+  orderItemModifiers OrderItemModifier[]
+
+  @@index([groupId])
+  @@index([inventoryItemId])
+  @@index([deletedAt])
+}
+
+model ProductModifierGroup {
+  productId         String
+  modifierGroupId   String
+  displayOrder      Int       @default(0)
+
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  modifierGroup     ModifierGroup   @relation(fields: [modifierGroupId], references: [id])
+
+  @@id([productId, modifierGroupId])
+}
+
+// ---------- 4. INVENTORY ----------
+model InventoryItem {
+  id                String   @id @default(cuid()) // [cite: 110]
+  productId         String? // nullable → raw material // [cite: 111]
+
+  name              String // [cite: 112]
+  code              String   @unique
+  barcode           String? // [cite: 113]
+  unit              ProductUnit // [cite: 114]
+  
+  currentStock      Decimal  @db.Decimal(10, 3) // [cite: 115]
+  reservedStock     Decimal  @db.Decimal(10, 3) @default(0)
+  availableStock    Decimal  @db.Decimal(10, 3) @default(0)
+  
+  criticalLevel     Decimal? @db.Decimal(10, 3) // [cite: 116]
+  optimalLevel      Decimal? @db.Decimal(10, 3) // [cite: 117]
+  
+  lastCost          Decimal? @db.Decimal(10, 2) // [cite: 118]
+  averageCost       Decimal? @db.Decimal(10, 2) // [cite: 119]
+
+  supplier          String? // [cite: 120]
+  supplierCode      String? // [cite: 121]
+  
+  location          String? // Depo konumu // [cite: 122]
+  expiryDate        DateTime? // [cite: 123]
+  active            Boolean   @default(true) // [cite: 124]
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 125]
+  product           Product? @relation(fields: [productId], references: [id]) // [cite: 126]
+  modifiers         Modifier[]
+  recipeItems       RecipeItem[]
+  stockMovements    StockMovement[]
+  stockCountItems StockCountItem[]
+
+  @@index([code])
+  @@index([barcode])
+  @@index([deletedAt])
+}
+
+model Recipe {
+  id                String   @id @default(cuid())
+  productId         String
+  name              String
+  yield             Decimal  @db.Decimal(10, 3) // portions // [cite: 127]
+  
+  preparationSteps  String? // JSON array of steps // [cite: 128]
+  preparationTime   Int? // dakika // [cite: 129]
+  
+  active            Boolean  @default(true) // [cite: 130]
+  version           Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime? // [cite: 131]
+  product           Product @relation(fields: [productId], references: [id]) // [cite: 132]
+  items             RecipeItem[]
+
+  @@unique([productId])
+  @@index([deletedAt])
+}
+
+model RecipeItem {
+  id                String   @id @default(cuid())
+  recipeId          String
+  inventoryItemId   String
+  quantity          Decimal  @db.Decimal(10, 3)
+  unit              ProductUnit // [cite: 133]
+  wastagePercent    Decimal  @db.Decimal(5, 2) @default(0) // [cite: 134]
+
+  recipe            Recipe        @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  inventoryItem     InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([recipeId])
+  @@index([inventoryItemId])
+}
+
+// ---------- 5. TABLE ----------
+model TableArea {
+  id                String   @id @default(cuid())
+  branchId          String
+  name              String   // "Bahçe", "İç Mekan", "Teras" // [cite: 135]
+  description       String? // [cite: 136]
+  displayOrder      Int       @default(0) // [cite: 137]
+  active            Boolean   @default(true) // [cite: 138]
+  smokingAllowed    Boolean   @default(false)
+  
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 139]
+  branch            Branch    @relation(fields: [branchId], references: [id]) // [cite: 140]
+  tables            Table[]
+
+  @@index([branchId])
+  @@index([deletedAt])
+}
+
+model Table {
+  id                String   @id @default(cuid())
+  branchId          String
+  areaId            String? // [cite: 141]
+  number            String // [cite: 142]
+  name              String? // Özel isim "VIP 1" // [cite: 143]
+  capacity          Int      @default(4)
+  minCapacity       Int      @default(1)
+  
+  // visual layout
+  positionX         Int? // [cite: 144]
+  positionY         Int? // [cite: 145]
+  width             Int? // [cite: 146]
+  height            Int? // [cite: 147]
+  shape             TableShape @default(RECTANGLE) // [cite: 148]
+
+  status            TableStatus @default(EMPTY) // [cite: 149]
+  mergedWithIds     String[]  // Birleştirilmiş masa ID'leri (Düzeltme 3 ile yerini TableMerge alacak)
+  
+  isVip             Boolean   @default(false) // [cite: 150]
+  qrCode            String? @unique // [cite: 151]
+  
+  active            Boolean   @default(true) // [cite: 152]
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 153]
+  branch            Branch    @relation(fields: [branchId], references: [id]) // [cite: 154]
+  area              TableArea? @relation(fields: [areaId], references: [id]) // [cite: 155]
+  orders            Order[]
+  mergedTables      TableMerge[] @relation("MainTable") // Düzeltme 3: Masa birleştirme için ilişki
+  isMergedWith      TableMerge[] @relation("MergedTable") // Düzeltme 3: Masa birleştirme için ilişki
+
+  @@unique([branchId, number])
+  @@index([branchId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+enum TableShape {
+  RECTANGLE
+  CIRCLE
+  SQUARE
+  OVAL
+}
+
+enum TableStatus {
+  EMPTY
+  OCCUPIED
+  RESERVED
+  CLEANING
+  UNAVAILABLE
+  MERGED
+}
+
+// Düzeltme 3: Masa Birleştirme Modeli
+model TableMerge {
+  id          String    @id @default(cuid())
+  tableId     String    // Ana masa
+  targetId    String    // Birleştirilen masa
+  createdAt   DateTime  @default(now())
+
+  mainTable   Table     @relation("MainTable", fields: [tableId], references: [id], onDelete: Cascade)
+  mergedTable Table     @relation("MergedTable", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([tableId, targetId])
+  @@index([tableId])
+  @@index([targetId])
+}
+
+
+// ---------- 6. ORDER ----------
+model Order {
+  id                String   @id @default(cuid())
+  branchId          String
+  orderNumber       String // 2024-0001 // [cite: 156]
+  orderCode         String? // Kısa kod "A47" // [cite: 157]
+
+  orderType         OrderType // [cite: 158]
+  tableId           String? // [cite: 159]
+  customerCount     Int? // [cite: 160]
+
+  customerId        String? // [cite: 161]
+  customerName      String? // [cite: 162]
+  customerPhone     String? // [cite: 163]
+  deliveryAddress   String? // [cite: 164]
+  deliveryNote      String? // [cite: 165]
+
+  status            OrderStatus @default(PENDING)
+  paymentStatus     PaymentStatus @default(UNPAID)
+
+  // merge / split helpers (TableMerge modeli yerine geçiyor)
+  mergeTargetId     String? // [cite: 166] (Artık TableMerge modelinden yönetilecek, bu alan bilgi amaçlı kalabilir)
+  splitFromId       String? // [cite: 167]
+  
+  // Fiyatlandırma
+  subtotal          Decimal  @db.Decimal(10, 2) // [cite: 168]
+  discountAmount    Decimal  @db.Decimal(10, 2) @default(0)
+  discountRate      Decimal  @db.Decimal(5, 2) @default(0)
+  discountReason    String? // [cite: 169]
+  serviceCharge     Decimal  @db.Decimal(10, 2) @default(0) // [cite: 170]
+  deliveryFee       Decimal  @db.Decimal(10, 2) @default(0) // [cite: 171]
+  taxAmount         Decimal  @db.Decimal(10, 2) // [cite: 172]
+  totalAmount       Decimal  @db.Decimal(10, 2) // [cite: 173]
+  paidAmount        Decimal  @db.Decimal(10, 2) @default(0) // [cite: 174]
+  changeAmount      Decimal  @db.Decimal(10, 2) @default(0) // [cite: 175]
+  tipAmount         Decimal  @db.Decimal(10, 2) @default(0) // [cite: 176]
+  roundingAmount    Decimal  @db.Decimal(10, 2) @default(0) // [cite: 177]
+
+  // Personel
+  waiterId          String? // [cite: 178]
+  cashierId         String? // [cite: 179]
+  courierId         String? // [cite: 180]
+  // Notlar
+  orderNote         String? // [cite: 181]
+  kitchenNote       String? // [cite: 182]
+  internalNote      String? // [cite: 183]
+  // Zamanlar
+  orderedAt         DateTime  @default(now()) // [cite: 184]
+  confirmedAt       DateTime? // [cite: 185]
+  preparingAt       DateTime? // [cite: 186]
+  preparedAt        DateTime? // [cite: 187]
+  servedAt          DateTime? // [cite: 188]
+  deliveredAt       DateTime? // [cite: 189]
+  completedAt       DateTime? // [cite: 190]
+  cancelledAt       DateTime? // [cite: 191]
+  estimatedTime     Int?      // Tahmini hazırlık süresi (dakika) // [cite: 192]
+  actualTime        Int? // Gerçek hazırlık süresi (dakika) // [cite: 193]
+
+  // Online sipariş bilgileri
+  onlinePlatformId  String? // [cite: 194]
+  platformOrderId   String? // [cite: 195]
+  platformOrderNo   String? // [cite: 196]
+
+  // Sync
+  syncId            String? @unique // [cite: 197]
+  lastSyncAt        DateTime? // [cite: 198]
+  version           Int       @default(1) // optimistic locking // [cite: 199]
+  createdAt         DateTime  @default(now()) // [cite: 200]
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 201]
+  branch            Branch    @relation(fields: [branchId], references: [id]) // [cite: 202]
+  table             Table? @relation(fields: [tableId], references: [id]) // [cite: 203]
+  customer          Customer? @relation(fields: [customerId], references: [id]) // [cite: 204]
+  waiter            User? @relation(fields: [waiterId], references: [id]) // [cite: 205]
+  courier           User? @relation(fields: [courierId], references: [id], name: "CourierOrder") // [cite: 206]
+  onlinePlatform    OnlinePlatform? @relation(fields: [onlinePlatformId], references: [id]) // [cite: 207]
+
+  items             OrderItem[]
+  payments          Payment[]
+  invoice           Invoice? @relation("OrderInvoice")
+  logs              OrderLog[] // [cite: 208]
+  onlineOrder       OnlineOrder? @relation("OrderOnlineOrder")
+  loyaltyTransactions LoyaltyTransaction[]
+  campaignUsages    CampaignUsage[]
+
+  @@unique([branchId, orderNumber])
+  @@index([branchId])
+  @@index([status])
+  @@index([orderedAt])
+  @@index([courierId])
+  @@index([customerId])
+  @@index([deletedAt])
+}
+
+enum OrderType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+  ONLINE
+  CATERING
+  SELF_SERVICE
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY
+  SERVING
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  RETURNED
+}
+
+// ---------- 7. ORDER ITEM ----------
+model OrderItem {
+  id                String   @id @default(cuid())
+  orderId           String
+  productId         String // [cite: 210]
+  variantId         String? // [cite: 211]
+  quantity          Decimal  @db.Decimal(10, 3) // [cite: 212]
+  unitPrice         Decimal  @db.Decimal(10, 2) // [cite: 213]
+  costPrice         Decimal? @db.Decimal(10, 2) // [cite: 214]
+  discountAmount    Decimal  @db.Decimal(10, 2) @default(0) // [cite: 215]
+  discountRate      Decimal  @db.Decimal(5, 2) @default(0) // [cite: 216]
+  taxRate           Decimal  @db.Decimal(5, 2) // [cite: 217]
+  taxAmount         Decimal  @db.Decimal(10, 2) // [cite: 218]
+  totalAmount       Decimal  @db.Decimal(10, 2) // [cite: 219]
+
+  status            OrderItemStatus @default(PENDING) // [cite: 220]
+
+  // Mutfak takibi
+  sentToKitchenAt   DateTime? // [cite: 221]
+  startedAt         DateTime? // [cite: 222]
+  completedAt       DateTime? // [cite: 223]
+  servedAt          DateTime? // [cite: 224]
+  cancelledAt       DateTime? // [cite: 225]
+  // İade/İptal bilgileri
+  voidReason        String? // [cite: 226]
+  voidedBy          String? // [cite: 227]
+  // Grup siparişi
+  guestName         String? // "Masa 5 - Ali" // [cite: 228]
+  courseNumber      Int? // 1=Başlangıç, 2=Ana yemek, 3=Tatlı // [cite: 229]
+
+  note              String? // [cite: 230]
+  printCount        Int       @default(0) // [cite: 231]
+  lastPrintedAt     DateTime? // [cite: 232]
+  version           Int       @default(1) // [cite: 233]
+  createdAt         DateTime  @default(now()) // [cite: 234]
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 235]
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade) // [cite: 236]
+  product           Product  @relation(fields: [productId], references: [id])
+  variant           ProductVariant? @relation(fields: [variantId], references: [id]) // [cite: 237]
+  modifiers         OrderItemModifier[]
+
+  @@index([orderId])
+  @@index([status])
+  @@index([sentToKitchenAt])
+}
+
+enum OrderItemStatus {
+  PENDING
+  SENT
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+  VOID
+  RETURNED
+}
+
+model OrderItemModifier {
+  id                String   @id @default(cuid())
+  orderItemId       String
+  modifierId        String
+  name              String   // Anlık isim sakla // [cite: 238]
+  quantity          Int      @default(1) // [cite: 239]
+  price             Decimal  @db.Decimal(10, 2) // [cite: 240]
+
+  orderItem         OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifier          Modifier  @relation(fields: [modifierId], references: [id])
+
+  @@index([orderItemId])
+}
+
+// ---------- 8. PAYMENT / FINANCE ----------
+model PaymentMethod {
+  id                String   @id @default(cuid()) // [cite: 241]
+  companyId         String
+  name              String   // "Nakit", "Kredi Kartı"
+  code              String   // "CASH", "CC"
+  type              PaymentMethodType // [cite: 242]
+  
+  // Komisyon ve limit bilgileri
+  commissionRate    Decimal  @db.Decimal(5, 2) @default(0) // [cite: 243]
+  minAmount         Decimal? @db.Decimal(10, 2) // [cite: 244]
+  maxAmount         Decimal? @db.Decimal(10, 2) // [cite: 245]
+  
+  requiresApproval  Boolean  @default(false) // [cite: 246]
+  requiresReference Boolean  @default(false)
+  
+  // Entegrasyon bilgileri
+  providerName      String? // "Garanti", "YKB" // [cite: 247]
+  merchantId        String? // [cite: 248]
+  terminalId        String? // [cite: 249]
+  
+  displayOrder      Int      @default(0) // [cite: 250]
+  active            Boolean  @default(true)
+  version           Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime? // [cite: 251]
+  company           Company   @relation(fields: [companyId], references: [id]) // [cite: 252]
+  payments          Payment[]
+
+  @@unique([companyId, code])
+  @@index([deletedAt])
+}
+
+enum PaymentMethodType {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  MEAL_CARD
+  MOBILE
+  TRANSFER
+  CHECK
+  CREDIT
+  LOYALTY_POINTS
+  GIFT_CARD
+  OTHER
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  paymentMethodId   String
+  
+  amount            Decimal  @db.Decimal(10, 2) // [cite: 253]
+  tipAmount         Decimal  @db.Decimal(10, 2) @default(0) // [cite: 254]
+  changeAmount      Decimal  @db.Decimal(10, 2) @default(0) // [cite: 255]
+  
+  // Kart bilgileri
+  approvalCode      String? // [cite: 256]
+  referenceNo       String? // [cite: 257]
+  maskedCardNumber  String? // [cite: 258]
+  cardHolderName    String? // [cite: 259]
+  installments      Int      @default(1) // [cite: 260]
+  
+  // Online ödeme
+  transactionId     String? // [cite: 261]
+  gatewayResponse   Json? // [cite: 262]
+  
+  status            PaymentStatus // [cite: 263]
+  paidAt            DateTime @default(now()) // [cite: 264]
+  refundedAt        DateTime? // [cite: 265]
+  refundAmount      Decimal? @db.Decimal(10, 2) // [cite: 266]
+  refundReason      String? // [cite: 267]
+  cashMovementId    String? // Relates to CashMovement // [cite: 268]
+
+  cashMovement      CashMovement? @relation(fields: [cashMovementId], references: [id]) // Added for relation
+  
+  version           Int      @default(1) // [cite: 269]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime? // [cite: 270]
+  order             Order        @relation(fields: [orderId], references: [id]) // [cite: 271]
+  paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id])
+
+  @@index([orderId])
+  @@index([paidAt])
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  REFUNDED
+  PARTIALLY_REFUNDED
+  VOIDED
+  FAILED
+}
+
+// ---------- 9. TAX ----------
+model Tax {
+  id                String   @id @default(cuid())
+  companyId         String
+  name              String   // "KDV %8"
+  rate              Decimal  @db.Decimal(5, 2) // [cite: 272]
+  code              String   // "VAT8" // [cite: 273]
+  type              TaxType  @default(VAT) // [cite: 274]
+  
+  isDefault         Boolean  @default(false) // [cite: 275]
+  isIncluded        Boolean  @default(true) // Fiyata dahil mi? // [cite: 276]
+  active            Boolean  @default(true) // [cite: 277]
+  version           Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime? // [cite: 278]
+  company           Company  @relation(fields: [companyId], references: [id]) // [cite: 279]
+  products          Product[]
+
+  @@unique([companyId, code])
+  @@index([deletedAt])
+}
+
+enum TaxType {
+  VAT    // KDV
+  OTV    // ÖTV
+  OIV    // ÖİV
+  DAMGA  // Damga vergisi
+}
+
+// ---------- 10. INVOICE ----------
+model Invoice {
+  id                String   @id @default(cuid())
+  orderId           String? @unique // Düzeltme: one-to-one unique
+  invoiceType       InvoiceType // [cite: 280]
+  
+  // Fatura numaraları
+  serialNo          String   // "A" // [cite: 281]
+  sequenceNo        String   // "2024000001" // [cite: 282]
+  
+  // Müşteri bilgileri
+  customerName      String? // [cite: 283]
+  customerTaxNo     String? // [cite: 284]
+  customerTaxOffice String? // [cite: 285]
+  customerAddress   String? // [cite: 286]
+  customerPhone     String? // [cite: 287]
+  customerEmail     String? // [cite: 288]
+  
+  // Tutarlar
+  subtotal          Decimal  @db.Decimal(10, 2) // [cite: 289]
+  discountAmount    Decimal  @db.Decimal(10, 2) @default(0) // [cite: 290]
+  taxDetails        Json     // KDV matrahları // [cite: 291]
+  taxAmount         Decimal  @db.Decimal(10, 2) // [cite: 292]
+  totalAmount       Decimal  @db.Decimal(10, 2) // [cite: 293]
+  
+  // Yazı ile tutar
+  totalAmountText   String? // "Bin iki yüz elli TL" // [cite: 294]
+  
+  // E-Dönüşüm
+  uuid              String? @unique // e-Arşiv UUID // [cite: 295]
+  eArchiveStatus    EArchiveStatus? // [cite: 296]
+  eArchiveResponse  Json? // [cite: 297]
+  // İptal bilgileri
+  isCancelled       Boolean   @default(false) // [cite: 298]
+  cancelReason      String? // [cite: 299]
+  cancelledInvoiceId String?  // İptal edilen fatura // [cite: 300]
+  
+  // PDF
+  pdfUrl            String? // [cite: 301]
+  createdAt         DateTime  @default(now()) // [cite: 302]
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // [cite: 303]
+  printedAt         DateTime? // [cite: 304]
+  sentAt            DateTime? // [cite: 305]
+  viewedAt          DateTime? // [cite: 306]
+  order             Order? @relation("OrderInvoice", fields: [orderId], references: [id])
+
+  @@unique([serialNo, sequenceNo]) // Düzeltme 1: Fatura numarası benzersiz olmalı
+  @@index([createdAt])
+  @@index([customerTaxNo])
+  @@index([deletedAt])
+}
+
+enum InvoiceType {
+  RECEIPT           // Adisyon
+  INVOICE           // Fatura
+  E_ARCHIVE         // e-Arşiv
+  E_INVOICE         // e-Fatura
+  PROFORMA          // Proforma
+  RETURN            // İade faturası // [cite: 308]
+}
+
+enum EArchiveStatus {
+  PENDING
+  SENT
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ---------- 11. CASH MOVEMENT ----------
+model CashMovement {
+  id                String   @id @default(cuid())
+  branchId          String
+  userId            String
+  
+  type              CashMovementType // [cite: 309]
+  paymentMethodId   String? // [cite: 310]
+  amount            Decimal  @db.Decimal(10, 2) // [cite: 311]
+  description       String // [cite: 312]
+  
+  referenceId       String? // Order / Expense id // [cite: 313]
+  referenceType     String? // "ORDER", "EXPENSE", etc. // [cite: 314]
+  
+  previousBalance   Decimal  @db.Decimal(10, 2) // [cite: 315]
+  currentBalance    Decimal  @db.Decimal(10, 2) // [cite: 316]
+  
+  // Kasa bilgileri
+  cashRegisterId    String? // [cite: 317]
+  safeId            String? // Kasa/Güvenli kasa // [cite: 318]
+  
+  approvedBy        String? // [cite: 319]
+  approvedAt        DateTime? // [cite: 320]
+  
+  createdAt         DateTime @default(now()) // [cite: 321]
+  
+  branch            Branch   @relation(fields: [branchId], references: [id])
+  user              User     @relation(fields: [userId], references: [id])
+  payments          Payment[] // Added for relation
+
+  @@index([branchId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum CashMovementType {
+  SALE
+  REFUND
+  EXPENSE
+  INCOME
+  OPENING
+  CLOSING
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_IN
+  TRANSFER_OUT
+  SHORTAGE          // Kasa açığı // [cite: 322]
+  SURPLUS           // Kasa fazlası // [cite: 323]
+  MODIFIER_CONSUMPTION // Düzeltme 2: Ek malzeme tüketimi
+}
+
+// Gider takibi
+model Expense {
+  id                String   @id @default(cuid())
+  branchId          String
+  
+  categoryId        String // [cite: 324]
+  amount            Decimal  @db.Decimal(10, 2) // [cite: 325]
+  
+  description       String // [cite: 326]
+  invoiceNo         String? // [cite: 327]
+  supplierName      String? // [cite: 328]
+  
+  paymentMethodId   String? // [cite: 329]
+  paidAt            DateTime @default(now()) // [cite: 330]
+  dueDate           DateTime? // [cite: 331]
+  isRecurring       Boolean  @default(false) // [cite: 332]
+  recurringPeriod   String? // "MONTHLY", "WEEKLY" // [cite: 333]
+  
+  attachments       String[] // Fatura resimleri // [cite: 334]
+  
+  createdBy         String // [cite: 335]
+  approvedBy        String? // [cite: 336]
+  approvedAt        DateTime? // [cite: 337]
+  
+  createdAt         DateTime @default(now()) // [cite: 338]
+  updatedAt         DateTime @updatedAt
+  
+  category          ExpenseCategory @relation(fields: [categoryId], references: [id])
+  
+  @@index([branchId])
+  @@index([categoryId])
+  @@index([paidAt])
+}
+
+model ExpenseCategory {
+  id                String   @id @default(cuid())
+  companyId         String
+  
+  name              String   // "Kira", "Elektrik", "Personel" // [cite: 339]
+  code              String // [cite: 340]
+  parentId          String? // [cite: 341]
+  budgetLimit       Decimal? @db.Decimal(10, 2) // Aylık bütçe limiti // [cite: 342]
+  
+  active            Boolean  @default(true) // [cite: 343]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  parent            ExpenseCategory? @relation("ExpenseCategoryHierarchy", fields: [parentId], references: [id]) // [cite: 344]
+  children          ExpenseCategory[] @relation("ExpenseCategoryHierarchy")
+  expenses          Expense[]
+  
+  @@unique([companyId, code])
+}
+
+// ---------- 12. DAILY REPORT (Z-Report) ----------
+model DailyReport {
+  id                String   @id @default(cuid())
+  branchId          String
+  reportDate        DateTime @db.Date
+  reportNo          String   // "Z001234" // [cite: 345]
+
+  // Satış özeti
+  totalOrders       Int // [cite: 346]
+  totalItems        Int // [cite: 347]
+  totalCustomers    Int // [cite: 348]
+  averageTicket     Decimal  @db.Decimal(10, 2) // [cite: 349]
+  
+  // Tutarlar
+  grossSales        Decimal  @db.Decimal(10, 2) // [cite: 350]
+  totalDiscount     Decimal  @db.Decimal(10, 2) // [cite: 351]
+  totalServiceCharge Decimal @db.Decimal(10, 2) // [cite: 352]
+  netSales          Decimal  @db.Decimal(10, 2) // [cite: 353]
+  totalTax          Decimal  @db.Decimal(10, 2) // [cite: 354]
+  totalSales        Decimal  @db.Decimal(10, 2) // [cite: 355]
+  
+  // Ödeme dağılımı
+  cashSales         Decimal  @db.Decimal(10, 2) // [cite: 356]
+  creditCardSales   Decimal  @db.Decimal(10, 2) // [cite: 357]
+  debitCardSales    Decimal  @db.Decimal(10, 2) // [cite: 358]
+  mealCardSales     Decimal  @db.Decimal(10, 2) // [cite: 359]
+  otherSales        Decimal  @db.Decimal(10, 2) // [cite: 360]
+  
+  // İade/İptal
+  totalReturns      Decimal  @db.Decimal(10, 2) // [cite: 361]
+  totalCancellations Decimal @db.Decimal(10, 2) // [cite: 362]
+  
+  // Kasa durumu
+  openingBalance    Decimal  @db.Decimal(10, 2) // [cite: 363]
+  totalCashIn       Decimal  @db.Decimal(10, 2) // [cite: 364]
+  totalCashOut      Decimal  @db.Decimal(10, 2) // [cite: 365]
+  expectedBalance   Decimal  @db.Decimal(10, 2) // [cite: 366]
+  actualBalance     Decimal  @db.Decimal(10, 2) // [cite: 367]
+  difference        Decimal  @db.Decimal(10, 2) // [cite: 368]
+  
+  // Detaylar
+  taxBreakdown      Json     // KDV matrahları // [cite: 369]
+  categoryBreakdown Json     // Kategori bazlı satışlar // [cite: 370]
+  hourlyBreakdown   Json     // Saatlik satışlar // [cite: 371]
+  
+  // Mali bilgiler
+  zReportNo         String? // [cite: 372]
+  fiscalId          String? // Mali hafıza no // [cite: 373]
+  
+  createdAt         DateTime @default(now()) // [cite: 374]
+  createdBy         String // [cite: 375]
+  approvedBy        String? // [cite: 376]
+  approvedAt        DateTime? // [cite: 377]
+  
+  printedAt         DateTime? // [cite: 378]
+  emailedAt         DateTime? // [cite: 379]
+  branch            Branch   @relation(fields: [branchId], references: [id]) // [cite: 380]
+
+  @@unique([branchId, reportDate])
+  @@unique([branchId, reportNo])
+  @@index([branchId])
+  @@index([reportDate])
+}
+
+// ---------- 13. STOCK MOVEMENT ----------
+model StockMovement {
+  id                String   @id @default(cuid())
+  branchId          String
+  productId         String? // [cite: 381]
+  inventoryItemId   String? // [cite: 382]
+  
+  type              StockMovementType // [cite: 383]
+  reason            String? // Detaylı açıklama // [cite: 384]
+  
+  quantity          Decimal  @db.Decimal(10, 3) // [cite: 385]
+  unit              ProductUnit // [cite: 386]
+  
+  // Maliyet bilgileri
+  unitCost          Decimal? @db.Decimal(10, 2) // [cite: 387]
+  totalCost         Decimal? @db.Decimal(10, 2) // [cite: 388]
+  previousCost      Decimal? @db.Decimal(10, 2) // [cite: 389]
+  newAverageCost    Decimal? @db.Decimal(10, 2) // [cite: 390]
+  
+  // Stok seviyeleri
+  previousStock     Decimal  @db.Decimal(10, 3) // [cite: 391]
+  currentStock      Decimal  @db.Decimal(10, 3) // [cite: 392]
+  
+  // Referanslar
+  referenceId       String? // Order, Transfer, Purchase id // [cite: 393]
+  referenceType     String? // "ORDER", "TRANSFER", "PURCHASE" // [cite: 394]
+  referenceNo       String? // Belge no // [cite: 395]
+  
+  // Transfer bilgileri
+  fromBranchId      String? // [cite: 396]
+  toBranchId        String? // [cite: 397]
+  
+  // Tedarikçi bilgileri
+  supplierId        String? // [cite: 398]
+  invoiceNo         String? // [cite: 399]
+  note              String? // [cite: 400]
+  attachments       String[] // [cite: 401]
+  
+  createdAt         DateTime @default(now()) // [cite: 402]
+  createdBy         String // [cite: 403]
+  approvedBy        String? // [cite: 404]
+  approvedAt        DateTime? // [cite: 405]
+
+  branch            Branch         @relation(fields: [branchId], references: [id])
+  product           Product? @relation(fields: [productId], references: [id]) // [cite: 406]
+  inventoryItem     InventoryItem? @relation(fields: [inventoryItemId], references: [id]) // [cite: 407]
+
+  @@index([branchId])
+  @@index([productId])
+  @@index([inventoryItemId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum StockMovementType {
+  PURCHASE        // Satın alma
+  SALE            // Satış
+  RETURN_IN       // İade alım
+  RETURN_OUT      // İade verme
+  WASTE           // Fire
+  DAMAGE          // Hasar
+  THEFT           // Kayıp/Çalıntı // [cite: 408]
+  TRANSFER_IN     // Transfer giriş // [cite: 409]
+  TRANSFER_OUT    // Transfer çıkış // [cite: 410]
+  ADJUSTMENT      // Sayım düzeltme // [cite: 411]
+  PRODUCTION      // Üretim // [cite: 412]
+  CONSUMPTION     // Tüketim // [cite: 413]
+  SAMPLE          // Numune // [cite: 414]
+  GIFT            // Hediye/İkram // [cite: 415]
+  MODIFIER_CONSUMPTION // Düzeltme 2: Ek malzeme tüketimi (tekrar eklendi)
+}
+
+// Stok sayımı
+model StockCount {
+  id                String   @id @default(cuid()) // [cite: 416]
+  branchId          String // [cite: 417]
+  
+  countDate         DateTime // [cite: 418]
+  countType         StockCountType // [cite: 419]
+  status            StockCountStatus @default(DRAFT) // [cite: 420]
+  
+  note              String? // [cite: 421]
+  startedAt         DateTime? // [cite: 422]
+  completedAt       DateTime? // [cite: 423]
+  approvedAt        DateTime? // [cite: 424]
+  
+  createdBy         String // [cite: 425]
+  countedBy         String[] // [cite: 426]
+  approvedBy        String? // [cite: 427]
+  createdAt         DateTime @default(now()) // [cite: 428]
+  updatedAt         DateTime @updatedAt // [cite: 429]
+  
+  items             StockCountItem[]
+  
+  @@index([branchId])
+  @@index([countDate])
+}
+
+enum StockCountType {
+  FULL            // Tam sayım
+  PARTIAL         // Kısmi sayım
+  CYCLE           // Döngüsel sayım
+  SPOT            // Ani sayım // [cite: 430]
+}
+
+enum StockCountStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  APPROVED
+  CANCELLED
+}
+
+model StockCountItem {
+  id                String   @id @default(cuid())
+  stockCountId      String
+  inventoryItemId   String
+  
+  systemQuantity    Decimal  @db.Decimal(10, 3) // [cite: 431]
+  countedQuantity   Decimal  @db.Decimal(10, 3) // [cite: 432]
+  difference        Decimal  @db.Decimal(10, 3) // [cite: 433]
+  
+  unitCost          Decimal? @db.Decimal(10, 2) // [cite: 434]
+  totalDifference   Decimal? @db.Decimal(10, 2) // [cite: 435]
+  
+  note              String? // [cite: 436]
+  stockCount        StockCount    @relation(fields: [stockCountId], references: [id]) // [cite: 437]
+  inventoryItem     InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  
+  @@index([stockCountId])
+  @@index([inventoryItemId])
+}
+
+// ---------- 14. CUSTOMER ----------
+model Customer {
+  id                String   @id @default(cuid())
+  
+  // Kişisel bilgiler
+  firstName         String? // [cite: 438]
+  lastName          String? // [cite: 439]
+  companyName       String? // [cite: 440]
+  title             String?  // "Dr.", "Prof." // [cite: 441]
+  // Vergi bilgileri
+  taxNumber         String? // [cite: 442]
+  taxOffice         String? // [cite: 443]
+  // İletişim
+  phone             String   @unique // [cite: 444]
+  phone2            String? // [cite: 445]
+  email             String? // [cite: 446]
+  address           String? // [cite: 447]
+  district          String? // [cite: 448]
+  city              String? //
+  country           String? @default("TR") //
+  postalCode        String? //
+  // Pazarlama
+  birthDate         DateTime? //
+  gender            String? // "M", "F", "O" //
+  marketingConsent  Boolean  @default(false) //
+  smsConsent        Boolean  @default(false) //
+  emailConsent      Boolean  @default(false) //
+  
+  // Sadakat
+  loyaltyPoints     Int      @default(0) //
+  totalSpent        Decimal  @db.Decimal(10, 2) @default(0) //
+  orderCount        Int      @default(0) //
+  lastOrderDate     DateTime? //
+  // Cari
+  currentDebt       Decimal  @db.Decimal(10, 2) @default(0) //
+  creditLimit       Decimal  @db.Decimal(10, 2) @default(0) //
+  paymentTerm       Int? // Vade gün sayısı //
+  
+  // Segmentasyon
+  segment           String? // "VIP", "REGULAR", "NEW" //
+  tags              String[] //
+  
+  // Özel alanlar
+  customFields      Json? //
+  notes             String? //
+  // Kayıt bilgileri
+  source            String? // "POS", "ONLINE", "IMPORT" //
+  referredBy        String? //
+  blacklisted       Boolean  @default(false) //
+  blacklistReason   String? //
+  version           Int      @default(1) //
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime? //
+  orders            Order[] //
+  loyaltyCard       LoyaltyCard? //
+  reservations      Reservation[]
+  addresses         CustomerAddress[]
+  transactions      CustomerTransaction[]
+  campaignUsages    CampaignUsage[]
+
+  @@index([phone])
+  @@index([email])
+  @@index([taxNumber])
+  @@index([lastOrderDate])
+}
+
+model CustomerAddress {
+  id                String   @id @default(cuid())
+  customerId        String
+  
+  title             String   // "Ev", "İş" //
+  address           String //
+  district          String? //
+  city              String? //
+  postalCode        String? //
+  
+  directions        String? // Adres tarifi //
+  latitude          Float? //
+  longitude         Float? //
+  isDefault         Boolean  @default(false) //
+  
+  customer          Customer @relation(fields: [customerId], references: [id])
+  
+  @@index([customerId])
+}
+
+model CustomerTransaction {
+  id                String   @id @default(cuid())
+  customerId        String
+  
+  type              CustomerTransactionType //
+  amount            Decimal  @db.Decimal(10, 2) //
+  balance           Decimal  @db.Decimal(10, 2) // İşlem sonrası bakiye //
+  
+  description       String //
+  referenceId       String? //
+  referenceType     String? //
+  
+  dueDate           DateTime? //
+  paidAt            DateTime? //
+  createdAt         DateTime @default(now()) //
+  
+  customer          Customer @relation(fields: [customerId], references: [id])
+  
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+enum CustomerTransactionType {
+  SALE            // Satış
+  PAYMENT         // Ödeme
+  REFUND          // İade
+  OPENING         // Açılış
+  ADJUSTMENT      // Düzeltme
+}
+
+// ---------- 15. ONLINE PLATFORM ENTEGRASYONLARI ---------- //
+model OnlinePlatform {
+  id                String   @id @default(cuid())
+  companyId         String
+  
+  name              String   // "Yemeksepeti", "Getir", "Trendyol" //
+  code              String   // "YS", "GTR", "TRD" //
+  
+  // API bilgileri
+  apiUrl            String? //
+  apiKey            String? // encrypted //
+  apiSecret         String? // encrypted //
+  merchantId        String? //
+  storeId           String? //
+  // Ayarlar
+  active            Boolean  @default(true) //
+  autoAccept        Boolean  @default(false) //
+  autoReject        Int? // Dakika sonra otomatik red //
+  
+  // Komisyon
+  commissionRate    Decimal  @db.Decimal(5, 2) @default(0) //
+  commissionType    String   @default("PERCENTAGE") // "PERCENTAGE", "FIXED" //
+  
+  // Senkronizasyon
+  syncProducts      Boolean  @default(false) //
+  syncInterval      Int? // Dakika //
+  lastSyncAt        DateTime? //
+  // Çalışma saatleri
+  workingHours      Json? // Platform özel çalışma saatleri //
+  
+  createdAt         DateTime @default(now()) //
+  updatedAt         DateTime @updatedAt
+  
+  company           Company  @relation(fields: [companyId], references: [id])
+  orders            Order[]
+  onlineOrders      OnlineOrder[]
+  productMappings   OnlineProductMapping[]
+  
+  @@unique([companyId, code])
+}
+
+model OnlineOrder {
+  id                String   @id @default(cuid()) //
+  platformId        String //
+  orderId           String? @unique // POS sistemindeki order //
+  
+  platformOrderId   String   // Platform'daki order no //
+  platformOrderNo   String   // Görünen sipariş no //
+  
+  // Müşteri bilgileri
+  customerName      String //
+  customerPhone     String //
+  customerEmail     String? //
+  deliveryAddress   String //
+  deliveryNote      String? //
+  // Platform'dan gelen ham veri
+  orderData         Json //
+  
+  // Durum takibi
+  status            OnlineOrderStatus @default(PENDING) //
+  platformStatus    String? // Platform'daki durum //
+  
+  // Tutarlar
+  subtotal          Decimal  @db.Decimal(10, 2) //
+  deliveryFee       Decimal  @db.Decimal(10, 2) //
+  serviceFee        Decimal  @db.Decimal(10, 2) //
+  discount          Decimal  @db.Decimal(10, 2) //
+  totalAmount       Decimal  @db.Decimal(10, 2) //
+  commissionAmount  Decimal  @db.Decimal(10, 2) //
+  netAmount         Decimal  @db.Decimal(10, 2) //
+  
+  // Ödeme
+  paymentMethod     String //
+  isPaid            Boolean  @default(false) //
+  
+  // Zamanlar
+  orderedAt         DateTime //
+  requestedAt       DateTime? // İstenen teslimat //
+  acceptedAt        DateTime? //
+  rejectedAt        DateTime? //
+  preparingAt       DateTime? //
+  readyAt           DateTime? //
+  deliveringAt      DateTime? //
+  deliveredAt       DateTime? //
+  cancelledAt       DateTime? //
+  // Red/İptal
+  rejectReason      String? //
+  cancelReason      String? //
+  createdAt         DateTime @default(now()) //
+  updatedAt         DateTime @updatedAt
+  
+  platform          OnlinePlatform @relation(fields: [platformId], references: [id])
+  order             Order? @relation("OrderOnlineOrder", fields: [orderId], references: [id]) //
+  
+  @@unique([platformId, platformOrderId])
+  @@index([platformId])
+  @@index([status])
+  @@index([orderedAt])
+}
+
+enum OnlineOrderStatus {
+  PENDING         // Bekliyor
+  ACCEPTED        // Kabul edildi
+  REJECTED        // Reddedildi
+  PREPARING       // Hazırlanıyor
+  READY           // Hazır
+  DELIVERING      // Yolda
+  DELIVERED       // Teslim edildi
+  CANCELLED       // İptal edildi //
+  RETURNED        // İade edildi //
+}
+
+model OnlineProductMapping {
+  id                String   @id @default(cuid())
+  platformId        String
+  productId         String
+  
+  platformProductId String   // Platform'daki ürün ID //
+  platformBarcode   String? //
+  isActive          Boolean  @default(true) //
+  priceOverride     Decimal? @db.Decimal(10, 2) //
+  
+  platform          OnlinePlatform @relation(fields: [platformId], references: [id])
+  product           Product  @relation(fields: [productId], references: [id])
+  
+  @@unique([platformId, productId])
+  @@unique([platformId, platformProductId])
+}
+
+// ---------- 16. SADAKAT PROGRAMI ----------
+model LoyaltyCard {
+  id                String   @id @default(cuid())
+  customerId        String   @unique
+  
+  cardNumber        String   @unique //
+  cardType          LoyaltyCardType @default(STANDARD) //
+  
+  // Puan bilgileri
+  points            Int      @default(0) //
+  totalEarnedPoints Int      @default(0) //
+  totalSpentPoints  Int      @default(0) //
+  
+  // Para yükleme
+  balance           Decimal  @db.Decimal(10, 2) @default(0) //
+  totalLoaded       Decimal  @db.Decimal(10, 2) @default(0) //
+  
+  // İndirim
+  discountRate      Decimal  @db.Decimal(5, 2) @default(0) //
+  
+  // Kart durumu
+  pin               String? // encrypted //
+  issuedAt          DateTime @default(now()) //
+  activatedAt       DateTime? //
+  expiresAt         DateTime? //
+  lastUsedAt        DateTime? //
+  blocked           Boolean  @default(false) //
+  blockReason       String? //
+  active            Boolean  @default(true) //
+  
+  customer          Customer @relation(fields: [customerId], references: [id])
+  transactions      LoyaltyTransaction[]
+  
+  @@index([cardNumber])
+  @@index([customerId])
+}
+
+enum LoyaltyCardType {
+  STANDARD
+  SILVER
+  GOLD
+  PLATINUM
+  VIP
+  EMPLOYEE
+  GIFT
+}
+
+model LoyaltyTransaction {
+  id                String   @id @default(cuid())
+  cardId            String //
+  orderId           String? //
+  type              LoyaltyTransactionType //
+  
+  // Puan hareketi
+  points            Int      @default(0) // + veya - //
+  pointBalance      Int      // İşlem sonrası puan //
+  
+  // Para hareketi
+  amount            Decimal? @db.Decimal(10, 2) //
+  moneyBalance      Decimal? @db.Decimal(10, 2) // İşlem sonrası bakiye //
+  
+  description       String //
+  
+  // Puan kazanım detayı
+  baseAmount        Decimal? @db.Decimal(10, 2) // Puan kazanılan tutar //
+  multiplier        Decimal? @db.Decimal(5, 2) // Kampanya çarpanı //
+  
+  expiresAt         DateTime? // Puan son kullanma //
+  
+  createdAt         DateTime @default(now()) //
+  createdBy         String? //
+  card              LoyaltyCard @relation(fields: [cardId], references: [id]) //
+  order             Order? @relation(fields: [orderId], references: [id]) //
+  
+  @@index([cardId])
+  @@index([createdAt])
+}
+
+enum LoyaltyTransactionType {
+  EARN_PURCHASE     // Alışverişten kazanım
+  EARN_BONUS       // Bonus puan
+  EARN_CAMPAIGN    // Kampanya puanı
+  EARN_BIRTHDAY    // Doğum günü
+  EARN_REFERRAL    // Tavsiye
+  SPEND_DISCOUNT   // İndirim için harcama
+  SPEND_PRODUCT    // Ürün için harcama
+  LOAD_BALANCE     // Para yükleme
+  USE_BALANCE      // Para kullanma
+  TRANSFER_IN       // Transfer gelen //
+  TRANSFER_OUT      // Transfer giden //
+  EXPIRE            // Süresi dolma //
+  ADJUSTMENT        // Düzeltme //
+}
+
+// ---------- 17. REZERVASYON SİSTEMİ ----------
+model Reservation {
+  id                String   @id @default(cuid())
+  branchId          String //
+  customerId        String? //
+  // Müşteri bilgileri
+  customerName      String //
+  customerPhone     String //
+  customerEmail     String? //
+  // Rezervasyon detayları
+  reservationDate   DateTime //
+  reservationTime   String   // "19:00" //
+  reservationStartDateTime DateTime // Başlangıç tarih-saati //
+  reservationEndDateTime   DateTime // Bitiş tarih-saati //
+  duration          Int      @default(120) // dakika //
+  guestCount        Int //
+  childCount        Int      @default(0) //
+  
+  // Masa bilgileri
+  tableIds          String[] // Reserved table IDs //
+  tablePreference   String? // "window", "garden", "quiet" //
+  
+  status            ReservationStatus @default(PENDING) //
+  
+  // Notlar
+  specialRequests   String? // Müşteri istekleri //
+  allergyInfo       String? // Alerji bilgileri //
+  occasionType      String? // "birthday", "anniversary" //
+  internalNotes     String? // İç notlar //
+  
+  // Kaynak ve onay
+  source            ReservationSource @default(PHONE) //
+  confirmationCode  String? //
+  confirmedBy       String? //
+  
+  // Depozito
+  depositRequired   Boolean  @default(false) //
+  depositAmount     Decimal? @db.Decimal(10, 2) //
+  depositPaid       Boolean  @default(false) //
+  
+  // Hatırlatma
+  reminderSent      Boolean  @default(false) //
+  reminderSentAt    DateTime? //
+  // Zamanlar
+  confirmedAt       DateTime? //
+  cancelledAt       DateTime? //
+  seatedAt          DateTime? //
+  completedAt       DateTime? //
+  // İptal/No-show
+  cancelReason      String? //
+  noShowFee         Decimal? @db.Decimal(10, 2) //
+  
+  createdAt         DateTime @default(now()) //
+  updatedAt         DateTime @updatedAt //
+  createdBy         String? //
+  branch            Branch   @relation(fields: [branchId], references: [id]) //
+  customer          Customer? @relation(fields: [customerId], references: [id]) //
+  
+  @@index([branchId, reservationDate])
+  @@index([customerPhone])
+  @@index([status])
+}
+
+enum ReservationStatus {
+  PENDING         // Beklemede
+  CONFIRMED       // Onaylandı
+  CANCELLED       // İptal edildi
+  SEATED          // Oturdu
+  COMPLETED       // Tamamlandı
+  NO_SHOW         // Gelmedi
+  WAITLIST        // Bekleme listesi
+}
+
+enum ReservationSource {
+  PHONE           // Telefon //
+  WALK_IN         // Yürüyerek //
+  WEBSITE         // Web sitesi //
+  MOBILE_APP      // Mobil uygulama //
+  THIRD_PARTY     // 3. parti //
+  SOCIAL_MEDIA    // Sosyal medya //
+}
+
+// ---------- 18. QR MENÜ ----------
+model QRMenu {
+  id                String   @id @default(cuid())
+  branchId          String //
+  
+  name              String   @default("QR Menü") //
+  qrCode            String   @unique // QR kod verisi //
+  shortUrl          String   @unique // kisa.link/abc123 //
+  
+  // Görünüm
+  template          String   @default("default") // Tema //
+  primaryColor      String   @default("#000000") //
+  secondaryColor    String   @default("#ffffff") //
+  fontFamily        String   @default("Inter") //
+  
+  // Görseller
+  logoUrl           String? //
+  coverImageUrl     String? //
+  backgroundUrl     String? //
+  // Ayarlar
+  showPrices        Boolean  @default(true) //
+  showImages        Boolean  @default(true) //
+  showDescriptions  Boolean  @default(true) //
+  showCalories      Boolean  @default(false) //
+  showAllergens     Boolean  @default(false) //
+  
+  // Sipariş
+  allowOrdering     Boolean  @default(false) //
+  minOrderAmount    Decimal? @db.Decimal(10, 2) //
+  
+  // Dil desteği
+  languages         String[] @default(["tr"]) //
+  defaultLanguage   String   @default("tr") //
+  
+  // İstatistik
+  viewCount         Int      @default(0) //
+  uniqueViewCount   Int      @default(0) //
+  lastViewedAt      DateTime? //
+  // Özel içerik
+  welcomeMessage    Json?    // Çoklu dil //
+  footerText        Json? // Çoklu dil //
+  
+  active            Boolean  @default(true) //
+  createdAt         DateTime @default(now()) //
+  updatedAt         DateTime @updatedAt
+  
+  branch            Branch   @relation(fields: [branchId], references: [id])
+  accessLogs        MenuAccessLog[]
+  feedbacks         MenuFeedback[]
+}
+
+model MenuAccessLog {
+  id                String   @id @default(cuid()) //
+  menuId            String //
+  
+  sessionId         String   // Unique view tracking //
+  ipAddress         String //
+  userAgent         String? //
+  // Cihaz bilgileri
+  deviceType        String? // mobile, tablet, desktop //
+  deviceModel       String? //
+  osName            String? //
+  osVersion         String? //
+  browserName       String? //
+  browserVersion    String? //
+  
+  // Konum
+  country           String? //
+  city              String? //
+  // Davranış
+  viewDuration      Int? // saniye //
+  clickCount        Int      @default(0) //
+  
+  accessedAt        DateTime @default(now()) //
+  
+  menu              QRMenu   @relation(fields: [menuId], references: [id])
+  
+  @@index([menuId, accessedAt])
+  @@index([sessionId])
+}
+
+model MenuFeedback {
+  id                String   @id @default(cuid()) //
+  menuId            String //
+  
+  rating            Int      // 1-5 //
+  comment           String? //
+  customerName      String? //
+  customerEmail     String? //
+  customerPhone     String? //
+  createdAt         DateTime @default(now()) //
+  
+  menu              QRMenu   @relation(fields: [menuId], references: [id])
+  
+  @@index([menuId])
+}
+
+// ---------- 19. SMS/BİLDİRİM ----------
+model NotificationTemplate {
+  id                String   @id @default(cuid())
+  companyId         String
+  
+  name              String
+  code              String   @unique // ORDER_READY, RESERVATION_CONFIRM //
+  channel           NotificationChannel //
+  
+  // İçerik
+  subject           String? // Email için //
+  content           String   // {customerName} değişkenlerini destekler //
+  
+  // SMS ayarları
+  smsLength         Int? // Karakter sayısı //
+  smsCredits        Int? // SMS kredisi //
+  
+  // Zamanlama
+  sendTiming        String? // "immediate", "scheduled" //
+  sendDelay         Int?     // Dakika gecikme //
+  
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  company           Company @relation(fields: [companyId], references: [id])
+  notificationLogs  NotificationLog[]
+
+  @@unique([companyId, code])
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  PUSH_NOTIFICATION
+  IN_APP
+}
+
+model NotificationLog {
+  id                String   @id @default(cuid())
+  templateId        String
+  recipient         String   // phone or email
+  channel           NotificationChannel
+  status            NotificationStatus // SENT, FAILED, DELIVERED, READ
+  
+  message           String   // Gerçek gönderilen mesaj içeriği
+  response          Json?    // SMS/Email sağlayıcısından gelen yanıt //
+  
+  sentAt            DateTime @default(now())
+  deliveredAt       DateTime? //
+  readAt            DateTime? //
+  failedReason      String? //
+  
+  template          NotificationTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([templateId])
+  @@index([recipient])
+  @@index([status])
+  @@index([sentAt])
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  BOUNCED
+  CANCELLED
+}
+
+// ---------- 20. RAPORLAMA VE ANALİZ ----------
+model AuditLog {
+  id                String   @id @default(cuid())
+  userId            String?  // nullable for system actions //
+  action            String   // "CREATE_PRODUCT", "UPDATE_ORDER", "LOGIN"
+  entityType        String?  // "Product", "Order", "User" //
+  entityId          String?  // Etkilenen varlığın ID'si //
+  details           Json?    // Değişen veriler, eski/yeni değerler //
+  ipAddress         String? //
+  userAgent         String? //
+  timestamp         DateTime @default(now()) //
+
+  user              User?    @relation(fields: [userId], references: [id]) //
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([timestamp])
+}
+
+model OrderLog {
+  id                String   @id @default(cuid())
+  orderId           String
+  userId            String?  // null if system action (e.g. auto-confirm) //
+  action            String   // "ORDER_CREATED", "ITEM_ADDED", "STATUS_UPDATED"
+  details           Json?    // additional context like status change (old, new) //
+  timestamp         DateTime @default(now())
+
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user              User?    @relation("UserOrderLogs", fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([timestamp])
+}
+
+model PriceOverride {
+  id                String   @id @default(cuid())
+  branchId          String
+  productId         String
+  variantId         String? //
+  
+  overridePrice     Decimal  @db.Decimal(10, 2) //
+  reason            String? //
+  
+  startDate         DateTime //
+  endDate           DateTime? //
+  
+  createdBy         String //
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branch            Branch   @relation(fields: [branchId], references: [id])
+  product           Product  @relation(fields: [productId], references: [id])
+  variant           ProductVariant? @relation(fields: [variantId], references: [id]) //
+
+  @@index([branchId, productId])
+  @@index([startDate, endDate])
+}
+
+// ---------- 21. FİRMA İÇİ BİLDİRİM VE GÖREV YÖNETİMİ ----------
+model Task {
+  id                String   @id @default(cuid())
+  branchId          String? //
+  companyId         String
+  
+  title             String
+  description       String? //
+  assignedToId      String? // User ID //
+  
+  status            TaskStatus @default(PENDING)
+  priority          TaskPriority @default(MEDIUM)
+  
+  dueDate           DateTime? //
+  completedAt       DateTime? //
+  
+  createdBy         String // User ID
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  company           Company @relation(fields: [companyId], references: [id])
+  branch            Branch? @relation(fields: [branchId], references: [id]) //
+  assignedTo        User?   @relation("UserAssignedTasks", fields: [assignedToId], references: [id]) //
+  createdByUser     User    @relation("UserCreatedTasks", fields: [createdBy], references: [id]) //
+
+  @@index([branchId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  ON_HOLD
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// ---------- 22. PRINTER / KDS YÖNETİMİ ----------
+model PrinterGroup {
+  id                String   @id @default(cuid())
+  name              String   @unique // "Mutfak", "Bar", "Kasa"
+  categoryIds       String[] // Bu gruba atanacak kategori ID'leri (Birden fazla kategoriye aynı yazıcı grubu atanabilir.) //
+
+  // İlişki ters taraftan zaten var: Category -> PrinterGroup
+  categories        Category[]
+  printers          Printer[]
+}
+
+model Printer {
+  id                String   @id @default(cuid())
+  branchId          String
+  printerGroupId    String?  // Hangi yazıcı grubuna ait //
+  
+  name              String   // Yazıcı adı (örn: "Mutfak Yazıcısı 1")
+  type              PrinterType // THERMAL, DOT_MATRIX, A4
+  
+  connectionType    String   // "NETWORK", "USB", "BLUETOOTH"
+  ipAddress         String? // Ağ yazıcıları için //
+  port              Int?     @default(9100) //
+  
+  active            Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  branch            Branch @relation(fields: [branchId], references: [id])
+  printerGroup      PrinterGroup? @relation(fields: [printerGroupId], references: [id]) //
+
+  @@index([branchId])
+  @@index([printerGroupId])
+}
+
+enum PrinterType {
+  THERMAL
+  DOT_MATRIX
+  A4
+}
+
+// ---------- 23. KAMPANYA YÖNETİMİ ----------
+model Campaign {
+  id                String   @id @default(cuid())
+  companyId         String
+  
+  name              String
+  code              String   @unique
+  description       String? //
+  
+  campaignType      CampaignType
+  discountType      DiscountType? //
+  discountValue     Decimal? @db.Decimal(10, 2) //
+  
+  minOrderAmount    Decimal? @db.Decimal(10, 2) //
+  maxDiscountAmount Decimal? @db.Decimal(10, 2) //
+  
+  startDate         DateTime
+  endDate           DateTime? //
+  
+  usageLimit        Int?     // Toplam kullanım limiti //
+  usageLimitPerUser Int?     // Kullanıcı başına kullanım limiti //
+  
+  active            Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  company           Company @relation(fields: [companyId], references: [id])
+  campaignUsages    CampaignUsage[]
+
+  @@unique([companyId, code])
+}
+
+enum CampaignType {
+  DISCOUNT
+  LOYALTY_POINT_BONUS
+  FREE_PRODUCT
+  BOGO // Buy One Get One
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT //
+}
+
+model CampaignUsage {
+  id                String   @id @default(cuid())
+  campaignId        String
+  orderId           String
+  customerId        String? //
+  
+  usedAt            DateTime @default(now()) //
+  discountApplied   Decimal  @db.Decimal(10, 2) //
+  pointsEarned      Int? //
+  
+  campaign          Campaign @relation(fields: [campaignId], references: [id])
+  order             Order    @relation(fields: [orderId], references: [id])
+  customer          Customer? @relation(fields: [customerId], references: [id]) //
+
+  @@index([campaignId])
+  @@index([orderId])
+  @@index([customerId])
+}
+
+// ---------- 24. KURYE LOKASYON TAKİBİ ----------
+model CourierLocation {
+  id                String   @id @default(cuid())
+  courierId         String
+  branchId          String
+  
+  latitude          Float
+  longitude         Float
+  timestamp         DateTime @default(now())
+  
+  courier           User     @relation(fields: [courierId], references: [id])
+  branch            Branch   @relation(fields: [branchId], references: [id])
+
+  @@index([courierId])
+  @@index([timestamp]) // Düzeltme 5: TTL cron job için indeks
+  expiresAt DateTime @default(dbgenerated("NOW() + INTERVAL '7 days'")) // PostgreSQL	
+}
