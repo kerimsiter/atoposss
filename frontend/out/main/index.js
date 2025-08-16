@@ -5,14 +5,22 @@ const utils = require("@electron-toolkit/utils");
 const icon = path.join(__dirname, "../../resources/icon.png");
 function createWindow() {
   const mainWindow = new electron.BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 1400,
+    height: 900,
+    minWidth: 1e3,
+    minHeight: 700,
     show: false,
     autoHideMenuBar: true,
+    resizable: true,
+    maximizable: true,
     ...process.platform === "linux" ? { icon } : {},
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
-      sandbox: false
+      sandbox: false,
+      webSecurity: false,
+      // Allow external API calls
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
   mainWindow.on("ready-to-show", () => {
