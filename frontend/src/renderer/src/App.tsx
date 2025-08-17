@@ -1,33 +1,19 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import ProductManagement from './pages/ProductManagement';
-
-// Create Material UI theme
-const theme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-    secondary: {
-      main: '#dc004e',
-    },
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-  },
-});
+import { modernTheme } from './theme/modernTheme';
 
 function App(): React.JSX.Element {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={modernTheme}>
       <CssBaseline />
       <Box sx={{ 
         width: '100%', 
         minHeight: '100vh',
-        backgroundColor: '#f5f5f5'
+        background: 'linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%)',
+        position: 'relative'
       }}>
         <Router>
           <Routes>
