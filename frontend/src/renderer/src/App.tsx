@@ -12,8 +12,17 @@ function App(): React.JSX.Element {
       <Box sx={{ 
         width: '100%', 
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%)',
-        position: 'relative'
+        position: 'relative',
+        background: `
+          linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%),
+          radial-gradient(ellipse 1200px 800px at 0% 0%, rgba(119, 157, 255, 0.3) 0%, transparent 50%),
+          radial-gradient(ellipse 1000px 1200px at 100% 100%, rgba(255, 138, 128, 0.25) 0%, transparent 50%),
+          radial-gradient(ellipse 800px 600px at 50% 0%, rgba(0, 166, 86, 0.15) 0%, transparent 50%)
+        `,
+        '& > *': {
+          position: 'relative',
+          zIndex: 1,
+        }
       }}>
         <Router>
           <Routes>

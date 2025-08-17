@@ -12,9 +12,9 @@ const StyledCard = styled(Card, {
   borderRadius: 16,
   border: '1.5px solid rgba(246, 246, 246, 1)',
   background: glassmorphism 
-    ? 'rgba(253, 253, 253, 0.8)' 
-    : 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
-  backdropFilter: 'blur(32px)',
+    ? 'rgba(253, 253, 253, 0.7)' 
+    : 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 0.9) 100%)',
+  backdropFilter: 'blur(20px)',
   boxShadow: '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
   
