@@ -143,60 +143,68 @@ const ProductManagement: React.FC = () => {
                       </Typography>
                     </Box>
                   </Stack>
-
+                </Box>
+                
+                {/* Stats Cards and Buttons Row */}
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 3,
+                  flexWrap: 'wrap'
+                }}>
                   {/* Stats Cards */}
-                  <Stack direction="row" spacing={3} sx={{ mt: 3 }}>
+                  <Stack direction="row" spacing={2}>
                     <Box sx={{
-                      p: 2,
+                      p: 1.5,
                       borderRadius: 2,
                       background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
                       border: '1px solid rgba(45, 104, 255, 0.2)',
-                      minWidth: 120,
+                      minWidth: 100,
                       textAlign: 'center'
                     }}>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#2D68FF', mb: 0.5 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#2D68FF', mb: 0.5 }}>
                         {totalProducts}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                         Toplam Ürün
                       </Typography>
                     </Box>
 
                     <Box sx={{
-                      p: 2,
+                      p: 1.5,
                       borderRadius: 2,
                       background: 'linear-gradient(135deg, rgba(0, 166, 86, 0.1) 0%, rgba(76, 175, 80, 0.05) 100%)',
                       border: '1px solid rgba(0, 166, 86, 0.2)',
-                      minWidth: 120,
+                      minWidth: 100,
                       textAlign: 'center'
                     }}>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#00A656', mb: 0.5 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#00A656', mb: 0.5 }}>
                         {activeProducts}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                         Aktif Ürün
                       </Typography>
                     </Box>
 
                     <Box sx={{
-                      p: 2,
+                      p: 1.5,
                       borderRadius: 2,
                       background: 'linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(255, 183, 77, 0.05) 100%)',
                       border: '1px solid rgba(255, 152, 0, 0.2)',
-                      minWidth: 120,
+                      minWidth: 100,
                       textAlign: 'center'
                     }}>
-                      <Typography variant="h5" sx={{ fontWeight: 700, color: '#FF9800', mb: 0.5 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#FF9800', mb: 0.5 }}>
                         {stockTrackedProducts}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
                         Stok Takipli
                       </Typography>
                     </Box>
                   </Stack>
-                </Box>
-                
-                <Stack direction="row" spacing={2}>
+                  
+                  {/* Action Buttons */}
+                  <Stack direction="row" spacing={2}>
                   <ModernButton
                     startIcon={<RefreshIcon />}
                     onClick={handleRefresh}
@@ -251,6 +259,7 @@ const ProductManagement: React.FC = () => {
                     Yeni Ürün Ekle
                   </ModernButton>
                 </Stack>
+                </Box>
               </Box>
             </ModernCard>
 
