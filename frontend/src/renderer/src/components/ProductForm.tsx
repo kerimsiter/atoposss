@@ -20,20 +20,21 @@ import {
   Fade,
   CircularProgress
 } from '@mui/material';
-import { 
+import {
   Close as CloseIcon,
   Save as SaveIcon,
   Edit as EditIcon,
   Add as AddIcon,
   LocalOffer as PriceIcon,
   Category as CategoryIcon,
-  Receipt as TaxIcon,
-  Inventory as StockIcon
+  Inventory as StockIcon,
+  Image as ImageIcon
 } from '@mui/icons-material';
 import { Product, CreateProductData, useProductStore } from '../stores/useProductStore';
 import { useMetaStore } from '../stores/useMetaStore';
 import ModernTextField from './ui/ModernTextField';
 import ModernButton from './ui/ModernButton';
+import ModernImageUpload from './ui/ModernImageUpload';
 
 interface ProductFormProps {
   open: boolean;
@@ -43,14 +44,14 @@ interface ProductFormProps {
 
 const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => {
   const { addProduct, updateProduct, loading, error, clearError } = useProductStore();
-  const { 
-    categories, 
-    taxes, 
-    fetchCategories, 
-    fetchTaxes, 
-    loading: metaLoading 
+  const {
+    categories,
+    taxes,
+    fetchCategories,
+    fetchTaxes,
+    loading: metaLoading
   } = useMetaStore();
-  
+
   const [formData, setFormData] = useState<CreateProductData>({
     name: '',
     code: '',
@@ -62,6 +63,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     trackStock: false,
     unit: 'PIECE'
   });
+
+  const [productImage, setProductImage] = useState<string | undefined>(undefined);
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -78,17 +81,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     if (open) {
       if (product) {
         // Edit mode - populate form with existing product data
+        // Validate that categoryId and taxId exist in available options
+        const validCategoryId = categories.some(cat => cat.id === product.categoryId) ? product.categoryId : '';
+        const validTaxId = taxes.some(tax => tax.id === product.taxId) ? product.taxId : '';
+
         setFormData({
           name: product.name,
           code: product.code,
           barcode: product.barcode || '',
           description: product.description || '',
           basePrice: typeof product.basePrice === 'number' ? product.basePrice : Number(product.basePrice),
-          categoryId: product.categoryId,
-          taxId: product.taxId,
+          categoryId: validCategoryId,
+          taxId: validTaxId,
           trackStock: product.trackStock,
           unit: product.unit
         });
+        setProductImage(product.image);
       } else {
         // Add mode - reset form
         setFormData({
@@ -102,11 +110,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           trackStock: false,
           unit: 'PIECE'
         });
+        setProductImage(undefined);
       }
       setFormErrors({});
       clearError();
     }
-  }, [open, product, clearError]);
+  }, [open, product, categories, taxes, clearError]);
 
   const handleInputChange = (field: keyof CreateProductData) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: unknown } }
@@ -116,7 +125,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       ...prev,
       [field]: field === 'basePrice' ? Number(value) : value
     }));
-    
+
     // Clear field error when user starts typing
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: '' }));
@@ -165,12 +174,17 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     }
 
     try {
+      const productData = {
+        ...formData,
+        image: productImage
+      };
+
       if (product) {
         // Update existing product
-        await updateProduct(product.id, formData);
+        await updateProduct(product.id, productData);
       } else {
         // Add new product
-        await addProduct(formData);
+        await addProduct(productData);
       }
       onClose();
     } catch (error) {
@@ -191,23 +205,25 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   ];
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={onClose} 
-      maxWidth="md" 
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
       fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: 4,
-          border: '1.5px solid rgba(246, 246, 246, 1)',
-          background: 'rgba(253, 253, 253, 0.95)',
-          backdropFilter: 'blur(32px)',
-          boxShadow: '0px 32px 64px -12px rgba(0, 0, 0, 0.15)',
-          overflow: 'hidden'
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 4,
+            border: '1.5px solid rgba(246, 246, 246, 1)',
+            background: 'rgba(253, 253, 253, 0.95)',
+            backdropFilter: 'blur(32px)',
+            boxShadow: '0px 32px 64px -12px rgba(0, 0, 0, 0.15)',
+            overflow: 'hidden'
+          }
         }
       }}
     >
-      <DialogTitle sx={{ 
+      <DialogTitle sx={{
         p: 0,
         background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
         borderBottom: '1.5px solid rgba(230, 230, 230, 0.5)'
@@ -215,7 +231,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ p: 3 }}>
           <Stack direction="row" alignItems="center" spacing={2}>
             <Avatar sx={{
-              background: product 
+              background: product
                 ? 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)'
                 : 'linear-gradient(135deg, #779DFF 0%, #2D68FF 100%)',
               width: 48,
@@ -232,7 +248,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
               </Typography>
             </Box>
           </Stack>
-          
+
           <ModernButton
             glassmorphism
             onClick={onClose}
@@ -242,14 +258,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           </ModernButton>
         </Stack>
       </DialogTitle>
-      
+
       <DialogContent sx={{ p: 4 }}>
         <Fade in={open} timeout={300}>
           <Box>
             {error && (
-              <Alert 
-                severity="error" 
-                sx={{ 
+              <Alert
+                severity="error"
+                sx={{
                   mb: 3,
                   borderRadius: 2,
                   background: 'rgba(255, 82, 82, 0.1)',
@@ -264,6 +280,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
             )}
 
             <Stack spacing={4}>
+              {/* Product Image */}
+              <Box>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                  <ImageIcon color="primary" />
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
+                    Ürün Resmi
+                  </Typography>
+                </Stack>
+                <ModernImageUpload
+                  value={productImage}
+                  onChange={setProductImage}
+                  disabled={loading}
+                />
+              </Box>
+
+              <Divider />
+
               {/* Basic Information */}
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, color: '#1B1B1B' }}>
@@ -290,7 +323,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                       sx={{ flex: 1 }}
                       placeholder="Örn: PRD001"
                     />
-                    
+
                     <ModernTextField
                       label="Barkod"
                       value={formData.barcode}
@@ -330,8 +363,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                     onChange={handleInputChange('basePrice')}
                     error={!!formErrors.basePrice}
                     helperText={formErrors.basePrice}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">₺</InputAdornment>,
+                    slotProps={{
+                      input: {
+                        startAdornment: <InputAdornment position="start">₺</InputAdornment>,
+                      }
                     }}
                     sx={{ flex: 1 }}
                     placeholder="0.00"
@@ -373,7 +408,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                   <FormControl sx={{ flex: 1 }} error={!!formErrors.categoryId}>
                     <InputLabel>Kategori *</InputLabel>
                     <Select
-                      value={formData.categoryId}
+                      value={formData.categoryId || ''}
                       label="Kategori *"
                       onChange={handleInputChange('categoryId')}
                       disabled={metaLoading}
@@ -383,6 +418,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                         backdropFilter: 'blur(16px)',
                       }}
                     >
+                      <MenuItem value="">
+                        <em>Kategori Seçin</em>
+                      </MenuItem>
                       {categories.map((category) => (
                         <MenuItem key={category.id} value={category.id}>
                           {category.name}
@@ -399,7 +437,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                   <FormControl sx={{ flex: 1 }} error={!!formErrors.taxId}>
                     <InputLabel>Vergi Oranı *</InputLabel>
                     <Select
-                      value={formData.taxId}
+                      value={formData.taxId || ''}
                       label="Vergi Oranı *"
                       onChange={handleInputChange('taxId')}
                       disabled={metaLoading}
@@ -409,6 +447,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                         backdropFilter: 'blur(16px)',
                       }}
                     >
+                      <MenuItem value="">
+                        <em>Vergi Oranı Seçin</em>
+                      </MenuItem>
                       {taxes.map((tax) => (
                         <MenuItem key={tax.id} value={tax.id}>
                           {tax.name} ({tax.rate}%)
@@ -473,27 +514,57 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         </Fade>
       </DialogContent>
 
-      <DialogActions sx={{ 
-        p: 3, 
+      <DialogActions sx={{
+        p: 3,
         background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
         borderTop: '1.5px solid rgba(230, 230, 230, 0.5)'
       }}>
         <Stack direction="row" spacing={2} sx={{ width: '100%', justifyContent: 'flex-end' }}>
-          <ModernButton 
-            glassmorphism
-            onClick={onClose} 
+          <ModernButton
+            onClick={onClose}
             disabled={loading}
             size="large"
+            sx={{
+              background: '#F1F1F1',
+              border: '1px solid #E0E0E0',
+              color: '#1B1B1B',
+              borderRadius: 12,
+              fontWeight: 500,
+              textTransform: 'none',
+              px: 3,
+              py: 1.5,
+              '&:hover': {
+                background: '#EBEBEB',
+                border: '1px solid #D0D0D0',
+              },
+              '&:disabled': {
+                opacity: 0.6,
+              }
+            }}
           >
             İptal
           </ModernButton>
-          <ModernButton 
-            gradient
-            onClick={handleSubmit} 
+          <ModernButton
+            onClick={handleSubmit}
             disabled={loading || metaLoading}
             startIcon={loading ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
             size="large"
-            sx={{ minWidth: 140 }}
+            sx={{
+              minWidth: 140,
+              background: '#2D68FF',
+              color: 'white',
+              borderRadius: 12,
+              fontWeight: 500,
+              textTransform: 'none',
+              px: 3,
+              py: 1.5,
+              '&:hover': {
+                background: '#1E5AFF',
+              },
+              '&:disabled': {
+                opacity: 0.6,
+              }
+            }}
           >
             {loading ? 'Kaydediliyor...' : (product ? 'Güncelle' : 'Kaydet')}
           </ModernButton>

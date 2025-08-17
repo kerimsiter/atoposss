@@ -6,7 +6,9 @@ interface ModernCardProps extends CardProps {
   hover?: boolean;
 }
 
-const StyledCard = styled(Card)<ModernCardProps>(({ theme, glassmorphism, hover }) => ({
+const StyledCard = styled(Card, {
+  shouldForwardProp: (prop) => prop !== 'glassmorphism' && prop !== 'hover',
+})<ModernCardProps>(({ theme, glassmorphism, hover }) => ({
   borderRadius: 16,
   border: '1.5px solid rgba(246, 246, 246, 1)',
   background: glassmorphism 
@@ -25,17 +27,14 @@ const StyledCard = styled(Card)<ModernCardProps>(({ theme, glassmorphism, hover 
   }),
 }));
 
-const ModernCard: React.FC<ModernCardProps> = ({ 
-  children, 
-  glassmorphism = true, 
-  hover = true, 
-  ...props 
-}) => {
+const ModernCard: React.FC<ModernCardProps> = (props) => {
+  const { children, glassmorphism = true, hover = true, ...otherProps } = props;
+  
   return (
     <StyledCard 
       glassmorphism={glassmorphism} 
       hover={hover} 
-      {...props}
+      {...otherProps}
     >
       {children}
     </StyledCard>

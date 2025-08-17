@@ -5,7 +5,9 @@ interface ModernChipProps extends ChipProps {
   gradient?: boolean;
 }
 
-const StyledChip = styled(Chip)<ModernChipProps>(({ theme, gradient, color }) => ({
+const StyledChip = styled(Chip, {
+  shouldForwardProp: (prop) => prop !== 'gradient',
+})<ModernChipProps>(({ theme, gradient, color }) => ({
   borderRadius: 8,
   fontSize: '0.75rem',
   fontWeight: 500,
@@ -63,11 +65,10 @@ const StyledChip = styled(Chip)<ModernChipProps>(({ theme, gradient, color }) =>
   }),
 }));
 
-const ModernChip: React.FC<ModernChipProps> = ({ 
-  gradient = false, 
-  ...props 
-}) => {
-  return <StyledChip gradient={gradient} {...props} />;
+const ModernChip: React.FC<ModernChipProps> = (props) => {
+  const { gradient = false, ...otherProps } = props;
+  
+  return <StyledChip gradient={gradient} {...otherProps} />;
 };
 
 export default ModernChip;

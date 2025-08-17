@@ -48,6 +48,7 @@ export interface CreateProductData {
   trackStock: boolean;
   unit: string;
   companyId?: string; // Optional, will be set automatically
+  image?: string; // Product image URL
 }
 
 interface ProductStore {

@@ -6,7 +6,9 @@ interface ModernButtonProps extends ButtonProps {
   glassmorphism?: boolean;
 }
 
-const StyledButton = styled(Button)<ModernButtonProps>(({ theme, gradient, glassmorphism }) => ({
+const StyledButton = styled(Button, {
+  shouldForwardProp: (prop) => prop !== 'gradient' && prop !== 'glassmorphism',
+})<ModernButtonProps>(({ theme, gradient, glassmorphism }) => ({
   borderRadius: 12,
   padding: '12px 24px',
   fontSize: '0.875rem',
@@ -47,17 +49,14 @@ const StyledButton = styled(Button)<ModernButtonProps>(({ theme, gradient, glass
   }),
 }));
 
-const ModernButton: React.FC<ModernButtonProps> = ({ 
-  children, 
-  gradient = false, 
-  glassmorphism = false, 
-  ...props 
-}) => {
+const ModernButton: React.FC<ModernButtonProps> = (props) => {
+  const { children, gradient = false, glassmorphism = false, ...otherProps } = props;
+  
   return (
     <StyledButton 
       gradient={gradient} 
       glassmorphism={glassmorphism} 
-      {...props}
+      {...otherProps}
     >
       {children}
     </StyledButton>

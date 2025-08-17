@@ -111,18 +111,48 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           size="small"
-          sx={{ minWidth: 320 }}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon color="action" />
-              </InputAdornment>
-            ),
+          sx={{ 
+            minWidth: 320,
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 12,
+              background: '#F8F9FA',
+              border: '1px solid #E0E0E0',
+              '&:hover': {
+                background: '#F1F3FF',
+                border: '1px solid #D0D0D0',
+              },
+              '&.Mui-focused': {
+                background: '#FDFDFD',
+                border: '1px solid #2D68FF',
+                boxShadow: '0px 0px 0px 3px rgba(45, 104, 255, 0.1)',
+              },
+              '& fieldset': {
+                border: 'none',
+              },
+            },
+            '& .MuiInputBase-input': {
+              color: '#1B1B1B',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              '&::placeholder': {
+                color: '#A8A8A8',
+                opacity: 1,
+              }
+            }
+          }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: '#A8A8A8', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }
           }}
         />
 
         <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel>
+          <InputLabel sx={{ color: '#A8A8A8', fontWeight: 500 }}>
             <Stack direction="row" alignItems="center" spacing={1}>
               <FilterIcon fontSize="small" />
               <span>Filtrele</span>
@@ -133,9 +163,26 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
             label="Filtrele"
             onChange={(e) => setFilterBy(e.target.value)}
             sx={{
-              borderRadius: 3,
-              background: 'rgba(253, 253, 253, 0.8)',
-              backdropFilter: 'blur(16px)',
+              borderRadius: 12,
+              background: '#F8F9FA',
+              border: '1px solid #E0E0E0',
+              '&:hover': {
+                background: '#F1F3FF',
+                border: '1px solid #D0D0D0',
+              },
+              '&.Mui-focused': {
+                background: '#FDFDFD',
+                border: '1px solid #2D68FF',
+                boxShadow: '0px 0px 0px 3px rgba(45, 104, 255, 0.1)',
+              },
+              '& fieldset': {
+                border: 'none',
+              },
+              '& .MuiSelect-select': {
+                color: '#1B1B1B',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+              }
             }}
           >
             <MenuItem value="all">Tümü</MenuItem>
@@ -247,15 +294,31 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ py: 2 }}>
-                      <Stack spacing={0.5}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                          {product.name}
-                        </Typography>
-                        {product.description && (
-                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                            {product.description}
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Avatar
+                          src={product.image || undefined}
+                          sx={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 2,
+                            background: product.image 
+                              ? 'transparent' 
+                              : 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
+                            border: '1.5px solid rgba(246, 246, 246, 1)',
+                          }}
+                        >
+                          {!product.image && <InventoryIcon color="primary" />}
+                        </Avatar>
+                        <Stack spacing={0.5}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                            {product.name}
                           </Typography>
-                        )}
+                          {product.description && (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                              {product.description}
+                            </Typography>
+                          )}
+                        </Stack>
                       </Stack>
                     </TableCell>
                     <TableCell sx={{ py: 2 }}>
@@ -313,13 +376,11 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
                             onClick={() => onEditProduct(product)}
                             sx={{
                               borderRadius: 2,
-                              background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
+                              background: 'rgba(45, 104, 255, 0.1)',
                               color: '#2D68FF',
                               '&:hover': {
-                                background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.2) 0%, rgba(119, 157, 255, 0.1) 100%)',
-                                transform: 'scale(1.1)',
+                                background: 'rgba(45, 104, 255, 0.2)',
                               },
-                              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                             }}
                           >
                             <EditIcon fontSize="small" />
@@ -331,13 +392,11 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
                             onClick={() => handleDeleteProduct(product.id, product.name)}
                             sx={{
                               borderRadius: 2,
-                              background: 'linear-gradient(135deg, rgba(255, 82, 82, 0.1) 0%, rgba(255, 138, 128, 0.05) 100%)',
+                              background: 'rgba(255, 82, 82, 0.1)',
                               color: '#FF5252',
                               '&:hover': {
-                                background: 'linear-gradient(135deg, rgba(255, 82, 82, 0.2) 0%, rgba(255, 138, 128, 0.1) 100%)',
-                                transform: 'scale(1.1)',
+                                background: 'rgba(255, 82, 82, 0.2)',
                               },
-                              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                             }}
                           >
                             <DeleteIcon fontSize="small" />

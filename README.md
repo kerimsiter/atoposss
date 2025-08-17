@@ -36,6 +36,8 @@ Bu proje, NestJS backend ve Electron-React-TypeScript frontend ile geliştirilmi
 - `GET /products/meta/companies` - Şirketleri getir
 - `GET /products/meta/categories` - Kategorileri getir
 - `GET /products/meta/taxes` - Vergi oranlarını getir
+- `POST /upload/product-image` - Ürün resmi yükle
+- `GET /upload/products/:filename` - Ürün resmini getir
 
 ### Backend Yapısı:
 ```
@@ -63,6 +65,7 @@ backend/
 - **ModernCard**: Glassmorphism kartlar
 - **ModernTextField**: Modern input alanları
 - **ModernChip**: Gradient chip bileşenleri
+- **ModernImageUpload**: Drag & drop resim yükleme (Figma inspired)
 
 ### Özellikler:
 - **Zustand State Management**: Global state yönetimi
@@ -108,6 +111,7 @@ frontend/src/renderer/src/
    - Real-time validation
    - Smooth animations
    - Icon-based sections
+   - Drag & drop image upload
 
 3. **Dashboard Stats**:
    - Toplam ürün sayısı
@@ -175,10 +179,27 @@ Frontend, `http://localhost:3000` adresindeki backend API'sine bağlanır ve tü
 - **Inter Font** - Modern typography
 - **Glassmorphism** - Modern UI effects
 
+## ✅ **Yeni Eklenen Özellikler**
+
+### **Ürün Resmi Yükleme Sistemi**
+- **Drag & Drop Upload**: Figma tasarımından ilham alınmış modern upload arayüzü
+- **File Validation**: Dosya türü ve boyut kontrolü
+- **Progress Indicator**: Real-time upload progress
+- **Preview System**: Yüklenen resimlerin önizlemesi
+- **Error Handling**: Kullanıcı dostu hata mesajları
+- **Responsive Design**: Tüm cihazlarda uyumlu
+
+### **Backend File Upload**
+- **Multer Integration**: Güvenli dosya yükleme
+- **File Validation**: MIME type ve boyut kontrolü
+- **Static File Serving**: Otomatik resim servisi
+- **Unique Filenames**: Çakışma önleme sistemi
+
 ## 🎯 Gelecek Özellikler
 
 - Kategori ve Vergi yönetimi
-- Ürün resmi yükleme
+- Çoklu resim desteği
+- Resim optimizasyonu
 - Toplu işlemler
 - Export/Import fonksiyonları
 - Gelişmiş filtreleme ve sıralama

@@ -51,6 +51,7 @@ export class ProductsService {
       featured: createProductDto.featured ?? false,
       displayOrder: createProductDto.displayOrder ?? 0,
       active: createProductDto.active ?? true,
+      image: createProductDto.image,
       images: [],
       allergens: [],
       hasVariants: false,
@@ -167,6 +168,9 @@ export class ProductsService {
     }
     if (updateProductDto.active !== undefined) {
       data.active = updateProductDto.active;
+    }
+    if (updateProductDto.image !== undefined) {
+      data.image = updateProductDto.image;
     }
 
     return this.prisma.product.update({
