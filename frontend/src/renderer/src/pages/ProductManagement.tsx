@@ -74,7 +74,6 @@ const ProductManagement: React.FC = () => {
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%)',
       position: 'relative',
       overflow: 'hidden'
     }}>
