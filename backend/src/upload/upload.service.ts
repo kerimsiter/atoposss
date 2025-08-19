@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { extname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import sharp from 'sharp';
 
 @Injectable()
 export class UploadService {
@@ -29,6 +30,26 @@ export class UploadService {
   isValidImageFile(mimetype: string): boolean {
     const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     return allowedMimeTypes.includes(mimetype);
+  }
+
+  // Process image buffer, convert to WebP, optionally resize, and save to disk
+  async processAndSaveImage(file: Express.Multer.File): Promise<string> {
+    this.validateImageFile(file);
+
+    // Always save as .webp
+    const filename = this.generateFileName(file.originalname).replace(extname(file.originalname), '.webp');
+    const outputPath = `${this.uploadPath}/${filename}`;
+
+    try {
+      await sharp(file.buffer)
+        .resize({ width: 800, withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toFile(outputPath);
+
+      return this.getFileUrl(filename);
+    } catch (error) {
+      throw new BadRequestException('Resim işlenirken hata oluştu');
+    }
   }
 
   generateFileName(originalName: string): string {

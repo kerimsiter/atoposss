@@ -9,7 +9,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { join } from 'path';
 import { UploadService } from './upload.service';
@@ -21,14 +21,7 @@ export class UploadController {
   @Post('product-image')
   @UseInterceptors(
     FileInterceptor('image', {
-      storage: diskStorage({
-        destination: './uploads/products',
-        filename: (req, file, callback) => {
-          const uploadService = new UploadService();
-          const filename = uploadService.generateFileName(file.originalname);
-          callback(null, filename);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, callback) => {
         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
         const maxSize = 5 * 1024 * 1024; // 5MB
@@ -45,17 +38,16 @@ export class UploadController {
       },
     }),
   )
-  uploadProductImage(@UploadedFile() file: Express.Multer.File) {
+  async uploadProductImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
 
+    const url = await this.uploadService.processAndSaveImage(file);
+
     return {
       message: 'File uploaded successfully',
-      filename: file.filename,
-      originalName: file.originalname,
-      size: file.size,
-      url: this.uploadService.getFileUrl(file.filename),
+      url,
     };
   }
 
