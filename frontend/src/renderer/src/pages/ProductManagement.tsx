@@ -25,14 +25,14 @@ import ModernButton from '../components/ui/ModernButton';
 const ProductForm = lazy(() => import('../components/product/ProductForm'));
 
 const ProductManagement: React.FC = () => {
-  const { products, fetchProducts, loading, error, clearError } = useProductStore();
+  const { products, fetchProducts, loading, error, clearError, pagination } = useProductStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
 
-  // Fetch products when component mounts
+  // Fetch products when component mounts (server-side pagination)
   useEffect(() => {
-    fetchProducts();
+    fetchProducts({ page: 1, pageSize: 20, sortBy: 'createdAt', order: 'desc' });
   }, [fetchProducts]);
 
   // Show error in snackbar
@@ -58,7 +58,9 @@ const ProductManagement: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    fetchProducts();
+    const page = pagination?.page || 1;
+    const pageSize = pagination?.pageSize || 20;
+    fetchProducts({ page, pageSize, sortBy: 'createdAt', order: 'desc' });
   };
 
   const handleCloseSnackbar = () => {
@@ -67,9 +69,9 @@ const ProductManagement: React.FC = () => {
   };
 
   // Calculate stats
-  const activeProducts = products.filter(p => p.active).length;
-  const stockTrackedProducts = products.filter(p => p.trackStock).length;
-  const totalProducts = products.length;
+  const activeProducts = products.filter(p => p.active).length; // TODO: backend meta (todo-5)
+  const stockTrackedProducts = products.filter(p => p.trackStock).length; // TODO: backend meta (todo-5)
+  const totalProducts = pagination.total;
 
   return (
     <Box sx={{ 

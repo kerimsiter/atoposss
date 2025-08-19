@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -18,7 +18,8 @@ import {
   Tooltip,
   Fade,
   Skeleton,
-  InputAdornment
+  InputAdornment,
+  Pagination
 } from '@mui/material';
 import { 
   Edit as EditIcon, 
@@ -38,9 +39,69 @@ interface ProductListProps {
 }
 
 function ProductList({ onEditProduct }: ProductListProps) {
-  const { products, deleteProduct, loading } = useProductStore();
+  const { products, deleteProduct, loading, fetchProducts, pagination } = useProductStore();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState('all');
+  const [filterBy, setFilterBy] = useState<'all' | 'active' | 'inactive' | 'trackStock'>('all');
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
+
+  // Map UI filter to API params
+  const apiFilters = useMemo(() => {
+    return {
+      active:
+        filterBy === 'active' ? true : filterBy === 'inactive' ? false : undefined,
+      trackStock: filterBy === 'trackStock' ? true : undefined,
+    } as { active?: boolean; trackStock?: boolean };
+  }, [filterBy]);
+
+  // Debounced search/filter fetch
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setPage(1); // search/filter change resets to first page
+      fetchProducts({
+        page: 1,
+        pageSize,
+        search: searchTerm || undefined,
+        ...apiFilters,
+        sortBy: 'createdAt',
+        order: 'desc',
+      });
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [searchTerm, apiFilters, pageSize, fetchProducts]);
+
+  // Page change fetch
+  const handlePageChange = useCallback(
+    (_: React.ChangeEvent<unknown>, newPage: number) => {
+      setPage(newPage);
+      fetchProducts({
+        page: newPage,
+        pageSize,
+        search: searchTerm || undefined,
+        ...apiFilters,
+        sortBy: 'createdAt',
+        order: 'desc',
+      });
+    },
+    [pageSize, searchTerm, apiFilters, fetchProducts]
+  );
+
+  const handlePageSizeChange = useCallback(
+    (e: React.ChangeEvent<{ value: unknown }> | any) => {
+      const newSize = Number(e.target.value) || 20;
+      setPageSize(newSize);
+      setPage(1);
+      fetchProducts({
+        page: 1,
+        pageSize: newSize,
+        search: searchTerm || undefined,
+        ...apiFilters,
+        sortBy: 'createdAt',
+        order: 'desc',
+      });
+    },
+    [searchTerm, apiFilters, fetchProducts]
+  );
 
   const handleDeleteProduct = async (id: string, productName: string) => {
     if (window.confirm(`"${productName}" ürününü silmek istediğinizden emin misiniz?`)) {
@@ -52,19 +113,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
     }
   };
 
-  // Filter products based on search term and filter criteria
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
-
-    const matchesFilter = filterBy === 'all' ||
-      (filterBy === 'active' && product.active) ||
-      (filterBy === 'inactive' && !product.active) ||
-      (filterBy === 'trackStock' && product.trackStock);
-
-    return matchesSearch && matchesFilter;
-  });
+  // Server-side filtered list comes as `products`, total count is in `pagination.total`
 
   const getUnitLabel = (unit: string) => {
     const unitLabels: Record<string, string> = {
@@ -200,7 +249,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
           border: '1px solid rgba(45, 104, 255, 0.2)',
         }}>
           <Typography variant="body2" sx={{ fontWeight: 500, color: '#2D68FF' }}>
-            {filteredProducts.length} ürün gösteriliyor
+            Toplam {pagination.total} kayıt
           </Typography>
         </Box>
       </Stack>
@@ -248,7 +297,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
           <TableBody>
             {loading ? (
               <LoadingSkeleton />
-            ) : filteredProducts.length === 0 ? (
+            ) : products.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
                   <Stack alignItems="center" spacing={2}>
@@ -270,7 +319,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product, index) => {
+              products.map((product, index) => {
                 return (
                   <Fade in={true} timeout={300 + index * 50} key={product.id}>
                     <TableRow 
@@ -413,6 +462,29 @@ function ProductList({ onEditProduct }: ProductListProps) {
             </TableBody>
           </Table>
         </TableContainer>
+        {/* Pagination Controls */}
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2 }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Sayfa Boyutu</InputLabel>
+            <Select
+              value={pageSize as any}
+              label="Sayfa Boyutu"
+              onChange={handlePageSizeChange}
+            >
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={20}>20</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+              <MenuItem value={100}>100</MenuItem>
+            </Select>
+          </FormControl>
+          <Pagination
+            count={Math.max(1, Math.ceil((pagination.total || 0) / pageSize))}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+            shape="rounded"
+          />
+        </Stack>
       </Box>
     );
   }

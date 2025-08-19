@@ -13,6 +13,7 @@ import {
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { ListProductsQueryDto } from './dto/list-products-query.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -24,8 +25,8 @@ export class ProductsController {
   }
 
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query() query: ListProductsQueryDto) {
+    return this.productsService.findAll(query);
   }
 
   // Check uniqueness of product code per company

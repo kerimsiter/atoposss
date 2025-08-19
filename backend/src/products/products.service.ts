@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Prisma } from '@prisma/client';
+import { ListProductsQueryDto } from './dto/list-products-query.dto';
 
 @Injectable()
 export class ProductsService {
@@ -140,22 +141,73 @@ export class ProductsService {
     }
   }
 
-  async findAll() {
-    return this.prisma.product.findMany({
-      where: {
-        deletedAt: null,
-        company: {
-          deletedAt: null
-        }
-      },
-      include: {
-        category: true,
-        tax: true,
-        company: true,
-        variants: true,
-        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
-      },
-    });
+  async findAll(query: ListProductsQueryDto) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const sortBy = query.sortBy ?? 'createdAt';
+    const order = query.order ?? 'desc';
+
+    const andFilters: Prisma.ProductWhereInput[] = [];
+
+    // Base filters
+    andFilters.push({ deletedAt: null });
+    andFilters.push({ company: { deletedAt: null } });
+
+    // Search across name/code/barcode
+    if (query.search && query.search.trim().length > 0) {
+      const s = query.search.trim();
+      andFilters.push({
+        OR: [
+          { name: { contains: s, mode: 'insensitive' } },
+          { code: { contains: s, mode: 'insensitive' } },
+          { barcode: { contains: s, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    // Booleans
+    if (typeof query.active === 'boolean') {
+      andFilters.push({ active: query.active });
+    }
+    if (typeof query.trackStock === 'boolean') {
+      andFilters.push({ trackStock: query.trackStock });
+    }
+
+    // Relations
+    if (query.categoryId) {
+      andFilters.push({ categoryId: query.categoryId });
+    }
+    if (query.companyId) {
+      andFilters.push({ companyId: query.companyId });
+    }
+
+    const where: Prisma.ProductWhereInput = {
+      AND: andFilters,
+    };
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          barcode: true,
+          basePrice: true,
+          unit: true,
+          active: true,
+          trackStock: true,
+          image: true,
+          createdAt: true,
+        },
+        orderBy: { [sortBy]: order },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return { data, page, pageSize, total };
   }
 
   async findOne(id: string) {

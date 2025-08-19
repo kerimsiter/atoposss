@@ -106,14 +106,31 @@ export interface CreateProductData {
   modifierGroups?: ModifierGroup[];
 }
 
+export interface ProductListParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  active?: boolean;
+  trackStock?: boolean;
+  categoryId?: string;
+  companyId?: string;
+  sortBy?: 'name' | 'code' | 'barcode' | 'basePrice' | 'createdAt' | 'updatedAt';
+  order?: 'asc' | 'desc';
+}
+
 interface ProductStore {
   products: Product[];
   selectedProduct: Product | null;
   loading: boolean;
   error: string | null;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+  };
   
   // Actions
-  fetchProducts: () => Promise<void>;
+  fetchProducts: (params?: ProductListParams) => Promise<void>;
   addProduct: (productData: CreateProductData) => Promise<void>;
   updateProduct: (id: string, productData: Partial<CreateProductData>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -128,12 +145,23 @@ export const useProductStore = create<ProductStore>((set) => ({
   selectedProduct: null,
   loading: false,
   error: null,
+  pagination: { page: 1, pageSize: 20, total: 0 },
 
-  fetchProducts: async () => {
+  fetchProducts: async (params?: ProductListParams) => {
     set({ loading: true, error: null });
     try {
-      const response = await axios.get(`${API_BASE_URL}/products`);
-      set({ products: response.data, loading: false });
+      const response = await axios.get(`${API_BASE_URL}/products`, { params });
+      const payload = response.data;
+      // Support both new paginated shape and legacy array (in case backend not updated)
+      const products = Array.isArray(payload) ? payload : payload.data;
+      const page = Array.isArray(payload) ? params?.page ?? 1 : payload.page;
+      const pageSize = Array.isArray(payload) ? params?.pageSize ?? 20 : payload.pageSize;
+      const total = Array.isArray(payload) ? products.length : payload.total;
+      set({ 
+        products,
+        pagination: { page, pageSize, total },
+        loading: false 
+      });
     } catch (error) {
       set({ 
         error: error instanceof Error ? error.message : 'Failed to fetch products',
