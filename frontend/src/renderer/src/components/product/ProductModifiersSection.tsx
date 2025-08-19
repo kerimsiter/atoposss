@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Stack, TextField, IconButton, Typography, Button, Divider, Switch, FormControlLabel, Autocomplete } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
 import { useMetaStore } from '../../stores/useMetaStore'
-import { useFieldArray, useFormContext } from 'react-hook-form'
+import { useFieldArray, useFormContext, useWatch } from 'react-hook-form'
 
 export interface ModifierItem {
   id: string
@@ -31,6 +31,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
   const { control, setValue, formState } = useFormContext<any>()
   const { errors } = formState as any
   const { fields: groupFields, append: appendGroup, remove: removeGroupAt } = useFieldArray({ control, name: 'modifierGroups' })
+  // Watch live values for the array so TextFields reflect edits instead of stale field defaults
+  const watchedGroups = (useWatch({ control, name: 'modifierGroups' }) as any[]) ?? []
 
   useEffect(() => {
     if (!modifierGroups || modifierGroups.length === 0) {
@@ -97,13 +99,16 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
         {groupFields.length === 0 && (
           <Typography variant="body2" color="text.secondary">Henüz grup eklenmedi.</Typography>
         )}
-        {groupFields.map((g, gi) => (
+        {groupFields.map((g, gi) => {
+          const wg = watchedGroups?.[gi] ?? (g as any)
+          const itemsArr = (wg?.items ?? []) as any[]
+          return (
           <Box key={g.id} sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
             <Stack spacing={2}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
                 <TextField
                   label={`Grup Adı #${gi + 1}`}
-                  value={(g as any).name}
+                  value={wg?.name ?? ''}
                   onChange={(e) => setValue(`modifierGroups.${gi}.name`, e.target.value, { shouldValidate: true, shouldDirty: true })}
                   fullWidth
                   placeholder="Örn: İçecek Boyutu"
@@ -113,7 +118,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
                 <TextField
                   label="Min Seçim"
                   type="number"
-                  value={(g as any).minSelect ?? 0}
+                  value={wg?.minSelect ?? 0}
                   onChange={(e) => setValue(`modifierGroups.${gi}.minSelect`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 0"
@@ -123,7 +128,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
                 <TextField
                   label="Maks Seçim"
                   type="number"
-                  value={(g as any).maxSelect ?? 1}
+                  value={wg?.maxSelect ?? 1}
                   onChange={(e) => setValue(`modifierGroups.${gi}.maxSelect`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 1"
@@ -136,7 +141,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
               </Stack>
 
               <Button variant="outlined" startIcon={<Add />} onClick={() => {
-                const items = ((g as any).items ?? []) as any[]
+                const items = (itemsArr ?? []) as any[]
                 const next = [...items, { id: crypto.randomUUID(), name: '', price: 0, affectsStock: false }]
                 setValue(`modifierGroups.${gi}.items`, next as any, { shouldValidate: true, shouldDirty: true })
               }}>
@@ -144,12 +149,12 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
               </Button>
 
               <Stack spacing={2}>
-                {((g as any).items ?? []).map((i: any, ii: number) => (
+                {itemsArr.map((i: any, ii: number) => (
                   <Box key={i.id} sx={{ p: 2, borderRadius: 2, border: '1px dashed rgba(0,0,0,0.1)', background: 'rgba(255,255,255,0.4)' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
                       <TextField
                         label={`Seçenek Adı #${ii + 1}`}
-                        value={i.name}
+                        value={itemsArr[ii]?.name ?? ''}
                         onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.name`, e.target.value, { shouldValidate: true, shouldDirty: true })}
                         fullWidth
                         placeholder="Örn: Büyük"
@@ -159,7 +164,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
                       <TextField
                         label="Fiyat"
                         type="number"
-                        value={i.price ?? 0}
+                        value={itemsArr[ii]?.price ?? 0}
                         onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.price`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                         sx={{ minWidth: 160 }}
                         placeholder="Örn: 5.00"
@@ -169,14 +174,14 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
                       <FormControlLabel
                         control={
                           <Switch
-                            checked={Boolean(i.affectsStock)}
+                            checked={Boolean(itemsArr[ii]?.affectsStock)}
                             onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.affectsStock`, e.target.checked, { shouldValidate: false, shouldDirty: true })}
                           />
                         }
                         label="Stok Etkiler"
                       />
                       <IconButton color="error" onClick={() => {
-                        const items = ((g as any).items ?? []) as any[]
+                        const items = (itemsArr ?? []) as any[]
                         const next = items.filter((_, index) => index !== ii)
                         setValue(`modifierGroups.${gi}.items`, next as any, { shouldValidate: true, shouldDirty: true })
                       }} aria-label="Seçeneği sil">
@@ -188,7 +193,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
               </Stack>
             </Stack>
           </Box>
-        ))}
+          )
+        })}
       </Stack>
 
       <Divider sx={{ mt: 3 }} />

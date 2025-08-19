@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+  import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   // Tabs & advanced sections local state (UI only for now)
   const [activeTab, setActiveTab] = useState<ProductFormTabKey>('general');
   // Variants & modifierGroups & allergens now RHF-managed via RHF
+  // Avoid Save button flicker: treat metaLoading as blocking only until core meta is first available
+  const metaBlocking = metaLoading && categories.length === 0 && taxes.length === 0;
 
   // Build resolver schema with duplicate code check (superRefine)
   const resolverSchema = useMemo(() =>
@@ -476,7 +478,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       <ProductFormActions
         isEditMode={isEditMode}
         loading={loading}
-        metaLoading={metaLoading}
+        metaLoading={metaBlocking}
         onClose={onClose}
         onSubmit={handleSubmit}
       />
