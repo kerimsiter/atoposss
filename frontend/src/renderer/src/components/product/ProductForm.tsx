@@ -22,7 +22,7 @@ import ProductFormTabs, { ProductFormTabKey } from './ProductFormTabs';
 import ProductVariantsSection, { VariantItem } from './ProductVariantsSection';
 import ProductModifiersSection, { ModifierGroup } from './ProductModifiersSection';
 import ProductAllergensSection from './ProductAllergensSection';
-import { productFullSchema, variantSchema, modifierGroupSchema, ProductFormInput } from '../../validation/productSchemas';
+import { productFullSchema, modifierGroupSchema } from '../../validation/productSchemas';
 import { z } from 'zod';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +33,7 @@ interface ProductFormProps {
   product?: Product | null;
 }
 
-type FormValues = Omit<ProductFormInput, 'allergens'> & { allergens: string[] | undefined };
+type FormValues = z.input<typeof productFullSchema>;
 
 const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => {
   const { addProduct, updateProduct, loading, error, clearError, products, fetchProducts } = useProductStore();
