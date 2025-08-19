@@ -37,6 +37,29 @@ export interface Product {
   deletedAt?: string;
 }
 
+// UI/store-level types for advanced product structures
+export interface ProductVariant {
+  id?: string;
+  name: string;
+  sku?: string;
+  price?: number;
+}
+
+export interface ModifierItem {
+  id?: string;
+  name: string;
+  price?: number;
+  affectsStock?: boolean;
+}
+
+export interface ModifierGroup {
+  id?: string;
+  name: string;
+  minSelect?: number;
+  maxSelect?: number;
+  items: ModifierItem[];
+}
+
 export interface CreateProductData {
   name: string;
   code: string;
@@ -49,6 +72,9 @@ export interface CreateProductData {
   unit: string;
   companyId?: string; // Optional, will be set automatically
   image?: string; // Product image URL
+  // Optional advanced data, will be sent once backend supports it
+  variants?: ProductVariant[];
+  modifierGroups?: ModifierGroup[];
 }
 
 interface ProductStore {

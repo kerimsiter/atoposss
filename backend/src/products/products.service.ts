@@ -54,11 +54,63 @@ export class ProductsService {
       image: createProductDto.image,
       images: [],
       allergens: [],
-      hasVariants: false,
-      hasModifiers: false,
+      hasVariants: Boolean(createProductDto.variants?.length),
+      hasModifiers: Boolean(createProductDto.modifierGroups?.length),
     };
 
-    return this.prisma.product.create({ data });
+    // Optional nested create for variants
+    if (createProductDto.variants?.length) {
+      data.variants = {
+        create: createProductDto.variants.map(v => ({
+          name: v.name,
+          code: v.sku ?? v.name, // fallback simple code
+          sku: v.sku ?? null,
+          price: new Prisma.Decimal(v.price),
+          active: true,
+        }))
+      };
+    }
+
+    // Optional nested create for modifier groups and items via join table
+    if (createProductDto.modifierGroups?.length) {
+      data.modifierGroups = {
+        create: createProductDto.modifierGroups.map((g, idx) => ({
+          displayOrder: idx,
+          modifierGroup: {
+            create: {
+              name: g.name,
+              minSelection: g.minSelect ?? 0,
+              maxSelection: g.maxSelect ?? 1,
+              required: (g.minSelect ?? 0) > 0,
+              freeSelection: 0,
+              active: true,
+              modifiers: g.items?.length
+                ? {
+                    create: g.items.map((i, ii) => ({
+                      name: i.name,
+                      price: new Prisma.Decimal(i.price ?? 0),
+                      maxQuantity: 1,
+                      displayOrder: ii,
+                      active: true,
+                    }))
+                  }
+                : undefined,
+            }
+          }
+        }))
+      } as any; // Prisma typing for nested create on join
+    }
+
+    return this.prisma.product.create({ 
+      data,
+      include: {
+        category: true,
+        tax: true,
+        company: true,
+        variants: true,
+        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+      }
+    });
   }
 
   async findAll() {
@@ -73,6 +125,8 @@ export class ProductsService {
         category: true,
         tax: true,
         company: true,
+        variants: true,
+        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
       },
     });
   }
@@ -87,6 +141,8 @@ export class ProductsService {
         category: true,
         tax: true,
         company: true,
+        variants: true,
+        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
       },
     });
 

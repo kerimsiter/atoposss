@@ -6,7 +6,6 @@ import {
   Alert,
   Typography,
   Stack,
-  Divider,
   Fade
 } from '@mui/material';
 import { Product, CreateProductData, useProductStore } from '../../stores/useProductStore';
@@ -19,6 +18,9 @@ import ProductFormStock from './ProductFormStock';
 import ProductFormActions from './ProductFormActions';
 import ModernImageUpload from '../ui/ModernImageUpload';
 import { PhotoCamera as ImageIcon } from '@mui/icons-material';
+import ProductFormTabs, { ProductFormTabKey } from './ProductFormTabs';
+import ProductVariantsSection, { VariantItem } from './ProductVariantsSection';
+import ProductModifiersSection, { ModifierGroup } from './ProductModifiersSection';
 
 interface ProductFormProps {
   open: boolean;
@@ -31,6 +33,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   const { categories, taxes, fetchCategories, fetchTaxes, loading: metaLoading } = useMetaStore();
 
   const isEditMode = !!product;
+
+  // Tabs & advanced sections local state (UI only for now)
+  const [activeTab, setActiveTab] = useState<ProductFormTabKey>('image');
+  const [variants, setVariants] = useState<VariantItem[]>([]);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
 
   const [formData, setFormData] = useState<CreateProductData>({
     name: '',
@@ -75,6 +82,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           unit: product.unit,
           image: product.image
         });
+        // Optionally hydrate tabs data from product when backend supports it
+        setVariants([]);
+        setModifierGroups([]);
       } else {
         // Add mode - reset form
         setFormData({
@@ -89,9 +99,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           unit: 'PIECE',
           image: undefined
         });
+        setVariants([]);
+        setModifierGroups([]);
       }
       setFormErrors({});
       clearError();
+      setActiveTab('image');
     }
   }, [open, product, categories, taxes, clearError]);
 
@@ -151,10 +164,32 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     }
 
     try {
+      // Map UI state to backend DTO
+      const mappedVariants = variants
+        .map(v => ({ name: v.name.trim(), sku: v.sku?.trim() || undefined, price: v.price }))
+        .filter(v => v.name && typeof v.price === 'number' && !Number.isNaN(v.price));
+
+      const mappedModifierGroups = modifierGroups
+        .map(g => ({
+          name: g.name.trim(),
+          minSelect: g.minSelect ?? 0,
+          maxSelect: g.maxSelect ?? 1,
+          items: g.items
+            .map(i => ({ name: i.name.trim(), price: i.price ?? 0, affectsStock: !!i.affectsStock }))
+            .filter(i => i.name)
+        }))
+        .filter(g => g.name && g.items.length > 0);
+
+      const payload: CreateProductData = {
+        ...formData,
+        variants: mappedVariants.length ? mappedVariants : undefined,
+        modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
+      };
+
       if (product) {
-        await updateProduct(product.id, formData);
+        await updateProduct(product.id, payload);
       } else {
-        await addProduct(formData);
+        await addProduct(payload);
       }
       onClose();
     } catch (error) {
@@ -213,56 +248,67 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
               </Alert>
             )}
 
-            <Stack spacing={4}>
-              {/* Product Image */}
-              <Box>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                  <ImageIcon color="primary" />
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
-                    Ürün Resmi
-                  </Typography>
-                </Stack>
-                <ModernImageUpload
-                  value={formData.image}
-                  onChange={handleImageChange}
-                  disabled={loading}
+            <Stack spacing={3}>
+              <ProductFormTabs value={activeTab} onChange={setActiveTab} />
+
+              {activeTab === 'image' && (
+                <Box>
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                    <ImageIcon color="primary" />
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
+                      Ürün Resmi
+                    </Typography>
+                  </Stack>
+                  <ModernImageUpload
+                    value={formData.image}
+                    onChange={handleImageChange}
+                    disabled={loading}
+                  />
+                </Box>
+              )}
+
+              {activeTab === 'basic' && (
+                <ProductFormBasicInfo
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                  formErrors={formErrors}
                 />
-              </Box>
+              )}
 
-              <Divider />
+              {activeTab === 'pricing' && (
+                <ProductFormPricing
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                  formErrors={formErrors}
+                  unitOptions={unitOptions}
+                />
+              )}
 
-              <ProductFormBasicInfo
-                formData={formData}
-                handleInputChange={handleInputChange}
-                formErrors={formErrors}
-              />
+              {activeTab === 'categories' && (
+                <ProductFormCategories
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                  formErrors={formErrors}
+                  categories={categories}
+                  taxes={taxes}
+                  metaLoading={metaLoading}
+                />
+              )}
 
-              <Divider />
+              {activeTab === 'stock' && (
+                <ProductFormStock
+                  trackStock={formData.trackStock}
+                  handleSwitchChange={handleSwitchChange}
+                />
+              )}
 
-              <ProductFormPricing
-                formData={formData}
-                handleInputChange={handleInputChange}
-                formErrors={formErrors}
-                unitOptions={unitOptions}
-              />
+              {activeTab === 'variants' && (
+                <ProductVariantsSection variants={variants} onChange={setVariants} />
+              )}
 
-              <Divider />
-
-              <ProductFormCategories
-                formData={formData}
-                handleInputChange={handleInputChange}
-                formErrors={formErrors}
-                categories={categories}
-                taxes={taxes}
-                metaLoading={metaLoading}
-              />
-
-              <Divider />
-
-              <ProductFormStock
-                trackStock={formData.trackStock}
-                handleSwitchChange={handleSwitchChange}
-              />
+              {activeTab === 'modifiers' && (
+                <ProductModifiersSection groups={modifierGroups} onChange={setModifierGroups} />
+              )}
             </Stack>
           </Box>
         </Fade>

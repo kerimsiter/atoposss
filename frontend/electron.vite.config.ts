@@ -12,7 +12,9 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@renderer': resolve('src/renderer/src')
+        '@renderer': resolve('src/renderer/src'),
+        // Use styled-components as the styling engine for MUI
+        '@mui/styled-engine': '@mui/styled-engine-sc'
       }
     },
     plugins: [react()]
