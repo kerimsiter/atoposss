@@ -91,6 +91,11 @@ export class CreateProductDto {
   // Optional: Variants and Modifiers
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
+  allergens?: string[];
+
+  @IsOptional()
+  @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ProductVariantInput)
   variants?: ProductVariantInput[];
@@ -115,6 +120,10 @@ export class ProductVariantInput {
 }
 
 export class ModifierItemInput {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsString()
   name: string;
 
@@ -128,6 +137,10 @@ export class ModifierItemInput {
 }
 
 export class ModifierGroupInput {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
   @IsString()
   name: string;
 

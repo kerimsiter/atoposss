@@ -1,7 +1,7 @@
 import React from 'react'
 import { Tabs, Tab, Box } from '@mui/material'
 
-export type ProductFormTabKey = 'general' | 'variants' | 'modifiers'
+export type ProductFormTabKey = 'general' | 'variants' | 'modifiers' | 'allergens'
 
 interface ProductFormTabsProps {
   value: ProductFormTabKey
@@ -25,6 +25,7 @@ const ProductFormTabs: React.FC<ProductFormTabsProps> = ({ value, onChange }) =>
         <Tab value="general" label="Genel" />
         <Tab value="variants" label="Varyantlar" />
         <Tab value="modifiers" label="Ek Seçenekler" />
+        <Tab value="allergens" label="Alerjenler" />
       </Tabs>
     </Box>
   )

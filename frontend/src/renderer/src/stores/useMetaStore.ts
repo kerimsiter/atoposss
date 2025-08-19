@@ -22,10 +22,25 @@ export interface Tax {
   isDefault: boolean;
 }
 
+export interface ModifierMetaItem {
+  id: string;
+  name: string;
+  price: number | string;
+}
+
+export interface ModifierGroupMeta {
+  id: string;
+  name: string;
+  minSelection?: number;
+  maxSelection?: number;
+  modifiers?: ModifierMetaItem[];
+}
+
 interface MetaStore {
   companies: Company[];
   categories: Category[];
   taxes: Tax[];
+  modifierGroups: ModifierGroupMeta[];
   loading: boolean;
   error: string | null;
   
@@ -33,6 +48,7 @@ interface MetaStore {
   fetchCompanies: () => Promise<void>;
   fetchCategories: (companyId?: string) => Promise<void>;
   fetchTaxes: (companyId?: string) => Promise<void>;
+  fetchModifierGroups: () => Promise<void>;
   fetchAllMeta: (companyId?: string) => Promise<void>;
   clearError: () => void;
 }
@@ -43,6 +59,7 @@ export const useMetaStore = create<MetaStore>((set, get) => ({
   companies: [],
   categories: [],
   taxes: [],
+  modifierGroups: [],
   loading: false,
   error: null,
 
@@ -91,15 +108,30 @@ export const useMetaStore = create<MetaStore>((set, get) => ({
     }
   },
 
+  fetchModifierGroups: async () => {
+    set({ loading: true, error: null });
+    try {
+      const url = `${API_BASE_URL}/products/meta/modifier-groups`;
+      const response = await axios.get(url);
+      set({ modifierGroups: response.data, loading: false });
+    } catch (error) {
+      set({ 
+        error: error instanceof Error ? error.message : 'Failed to fetch modifier groups',
+        loading: false 
+      });
+    }
+  },
+
   fetchAllMeta: async (companyId?: string) => {
-    const { fetchCompanies, fetchCategories, fetchTaxes } = get();
+    const { fetchCompanies, fetchCategories, fetchTaxes, fetchModifierGroups } = get();
     
     set({ loading: true, error: null });
     try {
       await Promise.all([
         fetchCompanies(),
         fetchCategories(companyId),
-        fetchTaxes(companyId)
+        fetchTaxes(companyId),
+        fetchModifierGroups(),
       ]);
       set({ loading: false });
     } catch (error) {

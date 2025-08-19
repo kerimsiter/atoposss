@@ -55,4 +55,9 @@ export class ProductsController {
   getTaxes(@Query('companyId') companyId?: string) {
     return this.productsService.getTaxes(companyId);
   }
+
+  @Get('meta/modifier-groups')
+  getModifierGroups() {
+    return this.productsService.getModifierGroups();
+  }
 }

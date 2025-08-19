@@ -21,6 +21,7 @@ import { PhotoCamera as ImageIcon } from '@mui/icons-material';
 import ProductFormTabs, { ProductFormTabKey } from './ProductFormTabs';
 import ProductVariantsSection, { VariantItem } from './ProductVariantsSection';
 import ProductModifiersSection, { ModifierGroup } from './ProductModifiersSection';
+import ProductAllergensSection from './ProductAllergensSection';
 
 interface ProductFormProps {
   open: boolean;
@@ -29,7 +30,7 @@ interface ProductFormProps {
 }
 
 const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => {
-  const { addProduct, updateProduct, loading, error, clearError } = useProductStore();
+  const { addProduct, updateProduct, loading, error, clearError, products, fetchProducts } = useProductStore();
   const { categories, taxes, fetchCategories, fetchTaxes, loading: metaLoading } = useMetaStore();
 
   const isEditMode = !!product;
@@ -38,6 +39,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   const [activeTab, setActiveTab] = useState<ProductFormTabKey>('general');
   const [variants, setVariants] = useState<VariantItem[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
+  const [allergens, setAllergens] = useState<string[]>([]);
 
   const [formData, setFormData] = useState<CreateProductData>({
     name: '',
@@ -59,8 +61,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     if (open) {
       fetchCategories();
       fetchTaxes();
+      // Ensure we have the latest products for duplicate code validation
+      fetchProducts();
     }
-  }, [open, fetchCategories, fetchTaxes]);
+  }, [open, fetchCategories, fetchTaxes, fetchProducts]);
 
   // Reset form when dialog opens/closes or product changes
   useEffect(() => {
@@ -121,10 +125,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           } else {
             setModifierGroups([]);
           }
+          // Allergens hydrate
+          const srvAllergens = (product as any).allergens as string[] | undefined;
+          setAllergens(Array.isArray(srvAllergens) ? srvAllergens : []);
         } catch (e) {
           console.warn('Product hydrate warning:', e);
           setVariants([]);
           setModifierGroups([]);
+          setAllergens([]);
         }
       } else {
         // Add mode - reset form
@@ -142,6 +150,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         });
         setVariants([]);
         setModifierGroups([]);
+        setAllergens([]);
       }
       setFormErrors({});
       clearError();
@@ -178,12 +187,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
+    const advancedIssues: string[] = [];
 
     if (!formData.name.trim()) {
       errors.name = 'Ürün adı gereklidir';
     }
-    if (!formData.code.trim()) {
+    const codeTrim = formData.code.trim();
+    if (!codeTrim) {
       errors.code = 'Ürün kodu gereklidir';
+    }
+    // Duplicate code check (frontend) — assumes single-company context
+    if (codeTrim) {
+      const exists = products.some(p =>
+        p.code.trim().toLowerCase() === codeTrim.toLowerCase() && (!product || p.id !== product.id)
+      );
+      if (exists) {
+        errors.code = 'Bu ürün kodu zaten kullanılıyor';
+      }
     }
     if (formData.basePrice <= 0) {
       errors.basePrice = 'Fiyat 0\'dan büyük olmalıdır';
@@ -193,6 +213,37 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     }
     if (!formData.taxId) {
       errors.taxId = 'Vergi oranı seçimi gereklidir';
+    }
+
+    // Advanced: variants validation
+    variants.forEach((v, idx) => {
+      const name = v.name?.trim();
+      const priceNum = typeof v.price === 'number' ? v.price : NaN;
+      if (!name) advancedIssues.push(`Varyant #${idx + 1}: Ad alanı zorunlu`);
+      if (!(priceNum >= 0)) advancedIssues.push(`Varyant #${idx + 1}: Fiyat 0 veya daha büyük olmalı`);
+    });
+
+    // Advanced: modifier groups validation
+    modifierGroups.forEach((g, gi) => {
+      const name = g.name?.trim();
+      if (!name) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: Ad alanı zorunlu`);
+      const minSel = Number(g.minSelect ?? 0);
+      const maxSel = Number(g.maxSelect ?? 1);
+      const count = g.items?.length ?? 0;
+      if (minSel < 0) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim negatif olamaz`);
+      if (maxSel < 0) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: maksimum seçim negatif olamaz`);
+      if (minSel > maxSel) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim maksimumdan büyük olamaz`);
+      if (minSel > count) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim öğe sayısından fazla olamaz`);
+      g.items.forEach((i, ii) => {
+        const iname = i.name?.trim();
+        const iprice = typeof i.price === 'number' ? i.price : NaN;
+        if (!iname) advancedIssues.push(`Ek Seçenek #${gi + 1}.${ii + 1}: Ad alanı zorunlu`);
+        if (!(iprice >= 0)) advancedIssues.push(`Ek Seçenek #${gi + 1}.${ii + 1}: Fiyat 0 veya daha büyük olmalı`);
+      });
+    });
+
+    if (advancedIssues.length) {
+      errors.advanced = advancedIssues.join('\n');
     }
 
     setFormErrors(errors);
@@ -206,23 +257,30 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
     try {
       // Map UI state to backend DTO
+      // CreateProductDto does NOT allow `id` on variants; UpdateProductDto does.
       const mappedVariants = variants
-        .map(v => ({ name: v.name.trim(), sku: v.sku?.trim() || undefined, price: v.price }))
+        .map(v => (
+          product
+            ? { id: v.id, name: v.name.trim(), sku: v.sku?.trim() || undefined, price: v.price }
+            : { name: v.name.trim(), sku: v.sku?.trim() || undefined, price: v.price }
+        ))
         .filter(v => v.name && typeof v.price === 'number' && !Number.isNaN(v.price));
 
       const mappedModifierGroups = modifierGroups
         .map(g => ({
+          id: g.id,
           name: g.name.trim(),
           minSelect: g.minSelect ?? 0,
           maxSelect: g.maxSelect ?? 1,
           items: g.items
-            .map(i => ({ name: i.name.trim(), price: i.price ?? 0, affectsStock: !!i.affectsStock }))
+            .map(i => ({ id: i.id, name: i.name.trim(), price: i.price ?? 0, affectsStock: !!i.affectsStock }))
             .filter(i => i.name)
         }))
         .filter(g => g.name && g.items.length > 0);
 
       const payload: CreateProductData = {
         ...formData,
+        allergens: allergens.length ? allergens : undefined,
         variants: mappedVariants.length ? mappedVariants : undefined,
         modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
       };
@@ -351,6 +409,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
               {activeTab === 'modifiers' && (
                 <ProductModifiersSection groups={modifierGroups} onChange={setModifierGroups} />
+              )}
+
+              {activeTab === 'allergens' && (
+                <ProductAllergensSection value={allergens} onChange={setAllergens} disabled={loading} />
               )}
             </Stack>
           </Box>

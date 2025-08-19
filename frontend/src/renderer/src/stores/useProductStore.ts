@@ -101,6 +101,7 @@ export interface CreateProductData {
   companyId?: string; // Optional, will be set automatically
   image?: string; // Product image URL
   // Optional advanced data, will be sent once backend supports it
+  allergens?: string[];
   variants?: ProductVariant[];
   modifierGroups?: ModifierGroup[];
 }
@@ -151,9 +152,33 @@ export const useProductStore = create<ProductStore>((set) => ({
         products: [...state.products, newProduct],
         loading: false 
       }));
-    } catch (error) {
+    } catch (error: any) {
+      // Log detailed backend error payload if available (e.g., validation errors)
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      if (status) {
+        console.error('Add product failed:', status, data);
+      } else {
+        console.error('Add product failed:', error);
+      }
+      // Prepare a friendlier error message for UI
+      let friendly = 'Ürün eklenemedi';
+      const rawMsg = data?.message;
+      if (Array.isArray(rawMsg)) {
+        friendly = rawMsg.join('\n');
+      } else if (typeof rawMsg === 'string') {
+        // Prisma P2002 unique constraint often bubbles up as 500 with generic message; map to clearer Turkish message when possible
+        if (rawMsg.toLowerCase().includes('unique') || rawMsg.toLowerCase().includes('constraint')) {
+          friendly = 'Bu şirket için ürün kodu benzersiz olmalıdır. Lütfen farklı bir kod girin.';
+        } else {
+          friendly = rawMsg;
+        }
+      } else if (status === 409) {
+        friendly = 'Bu şirket için ürün kodu zaten mevcut.';
+      }
+
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to add product',
+        error: friendly,
         loading: false 
       });
       throw error;

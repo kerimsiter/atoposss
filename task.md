@@ -1,38 +1,58 @@
+Elbette. Kullanıcı yönetimi ve yetkilendirme konusundaki geri bildiriminizi anlıyorum ve bu geliştirme aşaması için bu konuyu şimdilik bir kenara bırakıyoruz.
 
+Diğer önemli konular (gelişmiş veri güncelleme stratejisi, client-side validasyon, modifiye edici gruplarının tekrar kullanımı ve ek alanlar) için birleştirilmiş ve kapsamlı bir geliştirme planı hazırladım. Bu plan, projenizin mevcut yapısını (`components/product/` altındaki refactor edilmiş bileşenler) temel alarak ilerleyecektir.
 
-Mevcut proje yapınızda `components/product/` altında `ProductForm.tsx`, `ProductFormActions.tsx`, `ProductFormBasicInfo.tsx` gibi bileşenleriniz zaten mevcut. Bu, modüler bir geliştirme için çok iyi bir temel.
+---
 
-İşte ürün varyantları ve modifiye ediciler için detaylı frontend geliştirme planı:
+### Geliştirme Planı: Ürün Varyantları, Modifiye Ediciler ve Ek Bilgiler
 
-### Frontend Geliştirme Planı: Ürün Varyantları ve Modifiye Ediciler
+Bu plan hem backend hem de frontend tarafındaki gerekli adımları kapsar ve daha önce bahsettiğimiz "merge" stratejisini ve modüler UI yapısını merkeze alır.
 
-Bu plan, `ProductForm.tsx` dosyasını daha da genişleterek ürünlerin karmaşık özelliklerini yönetmenizi sağlayacaktır.
+#### 1. Backend Geliştirme (Prisma & NestJS)
 
-#### 1. Zustand State Yönetimi (`useProductStore.ts`)
+**A. DTO'ları ve Veri Modellerini Genişletme**
+Varyantlar ve modifiye ediciler için iç içe veri yapılarını desteklemek amacıyla DTO'larınızı güncelleyeceğiz.
 
-Mevcut `useProductStore`'u, varyantlar ve modifiye ediciler için gerekli alanları ve aksiyonları içerecek şekilde güncelleyeceğiz.
+* `ProductVariant` ve `Modifier` için yeni DTO'lar oluşturulacak. Örneğin, `CreateProductVariantDto` ve `CreateModifierDto`.
+* Ana `CreateProductDto` ve `UpdateProductDto` dosyaları bu yeni DTO dizilerini içerecek şekilde düzenlenecek. `UpdateProductDto`'da bu diziler isteğe bağlı (`@IsOptional()`) olacak ve içindeki verilerin geçerliliğini kontrol etmek için `@ValidateNested()` ve `@Type()` dekoratörleri kullanılacak.
+* Alerjenler için `string[]` tipinde bir alan eklemek, şemanızla uyumlu olacaktır.
 
-* **Yeni `Product` Modeli (Typescript):** `Product` tipi, `ProductVariant` ve `ModifierGroup` gibi alt dizileri içerecek şekilde güncellenmeli.
-* **Form Verisi (Form Data):** `ProductForm`'un içindeki `formData` state'i, varyantlar ve modifiye ediciler gibi verileri tutacak şekilde genişletilmeli.
-* **API Entegrasyonu (Actions):** `addProduct` ve `updateProduct` aksiyonları, bu yeni ve karmaşık veri yapısını backend'e doğru bir şekilde göndermeli.
+**B. Servis Mantığını Geliştirme (`products.service.ts`)**
+Bu kısım, veri güncelleme stratejisinin en kritik parçasıdır.
 
-#### 2. Yeni UI Bileşenleri (`ProductForm` için)
+* `create` Metodu: Ürünü, varyantlarını, modifiye edici gruplarını ve alerjenlerini tek bir işlemle (`nested create`) veritabanına kaydedecek.
+* `update` Metodu: Daha gelişmiş bir mantıkla çalışacak. Gelen veriyi mevcut veritabanı kaydıyla karşılaştıracak ve aşağıdaki "birleştirme" mantığını uygulayacak:
+    * **Mevcutlar için güncelleme:** Formdan gelen ve ID'si eşleşen kayıtları güncelleyecek.
+    * **Eksikler için silme:** Formda olmayan ancak veritabanında olan kayıtları silecek.
+    * **Yeniler için ekleme:** Formda olan ancak veritabanında olmayan yeni kayıtları ekleyecek.
+* **Modifiye Edici Gruplarının İlişkilendirilmesi:** `ModifierGroup` modelinin ID'sini alan bir mantık oluşturulacak. Bu sayede, yeni bir modifiye edici grubu oluşturmak yerine, var olanları bir ürünle ilişkilendirebileceğiz. Bu, modülün yeniden kullanılabilirliğini sağlayacaktır.
+* **Alerjenler ve Stok**: `allergens` dizisini ürün verisine dahil ederek kaydetme ve `trackStock` alanının doğru şekilde işlendiğinden emin olma.
 
-`ProductForm.tsx` dosyasının içine veya `components/product/` dizinine yeni alt bileşenler oluşturarak formun bu bölümlerini yöneteceğiz. Bu, refactor edilmiş dosya yapınızla tam uyumlu olacaktır.
+#### 2. Frontend Geliştirme (React & Zustand & MUI)
 
-* **`ProductFormTabs.tsx`:** Formun farklı bölümlerini (Temel Bilgiler, Varyantlar, Modifiye Ediciler, Envanter) yönetmek için bir sekmeli arayüz bileşeni. Bu, `DialogContent`'i daha düzenli hale getirecek.
-* **`ProductVariantsSection.tsx`:** Ürün varyantlarını dinamik olarak ekleme, düzenleme ve silme işlemlerini yapabileceğiniz bir bileşen.
-    * `TextField`'lar ile varyant adı, fiyatı, SKU'su gibi bilgiler girilebilir.
-    * `IconButton` veya `ModernButton` ile yeni varyant ekleme ve silme butonları yer alacak.
-* **`ProductModifiersSection.tsx`:** Modifiye edici gruplarını ve bu grupların içindeki modifiye edicileri yönetmenizi sağlayacak bir bileşen.
-    * Her grup için ad, minimum/maksimum seçim sayısı gibi ayarlar.
-    * Her modifiye edici için fiyat, ad ve stok etkileşimi gibi bilgiler.
+**A. Zustand State Yönetimi (`useProductStore.ts`)**
+* `Product` state'ine `variants` ve `modifierGroups` dizilerini ekleyin.
+* Formun bu karmaşık veri yapılarını yönetebilmesi için `formData` state'i güncellenecek.
+* Backend'deki yeni API'leri çağırmak için `addProduct` ve `updateProduct` aksiyonları güncellenecek.
 
-#### 3. Backend Entegrasyonu (API ve DTO'lar)
+**B. Yeni UI Bileşenleri Oluşturma (`components/product/` klasörü altında)**
+`ProductForm.tsx` dosyasının içine, her bir konuyu ayrı ayrı yönetecek alt bileşenler yerleştirilecek.
 
-Bu yeni form bileşenleri, arka planda var olan veya yeni oluşturulacak API uç noktalarını kullanacak.
+* **`ProductVariantsSection.tsx`:** Ürün varyantlarını dinamik olarak ekleyip düzenlemek için bir arayüz sunacak.
+    * `Map` metoduyla mevcut varyantlar listelenecek.
+    * Her varyant bir form bileşeni (`TextField`, `IconButton` ile silme) olarak gösterilecek.
+    * `Yeni Varyant Ekle` butonu, yeni bir varyant formunu dinamik olarak ekleyecek.
 
-* **Güncellenmiş `CreateProductDto` ve `UpdateProductDto`:** Backend'deki DTO'ları, varyantlar ve modifiye ediciler için gerekli alanları içerecek şekilde güncellememiz gerekecek. `Prisma`'nın iç içe veri oluşturma ve güncelleme (`nested create/update`) özelliklerini kullanacağız.
-* **Servis Mantığı (`products.service.ts`):** Ürün oluşturma ve güncelleme metotları, gelen `variants` ve `modifierGroups` dizilerini alıp, `prisma.product.create` veya `prisma.product.update` işlemlerinde bu verileri doğru şekilde işleyecek.
+* **`ProductModifiersSection.tsx`:** Modifiye edici gruplarını ve onların içindeki modifiye edicileri yönetmek için bir UI oluşturulacak.
+    * Mevcut modifiye edici gruplarını bir `Select` içinde seçme veya yeni bir grup oluşturma seçeneği sunulacak.
+    * Seçilen grubun altındaki modifiye ediciler, dinamik olarak listelenecek.
+    * Her modifiye edici için `TextField` ve `Switch` gibi bileşenlerle adı, fiyatı ve stok takibi gibi özellikler yönetilebilecek.
 
-Bu adımları takip ederek, ürün yönetimi formunuzu sadece temel bilgileri değil, aynı zamanda varyant ve modifiye edici gibi karmaşık verileri de yönetebilecek şekilde genişletebilirsiniz. Bu, uygulamanızın kurumsal ve profesyonel hedeflerine ulaşmasında büyük bir adım olacaktır.
+* **`ProductAllergensSection.tsx`:** Alerjen bilgilerini kolayca yönetmek için bir arayüz tasarlanacak.
+    * Çoklu seçim `Chip` bileşenleri veya `Checkbox`'lar kullanılarak ürünün içerdiği alerjenler seçilebilecek.
+
+**C. Gelişmiş Client-Side Validasyon**
+* `yup`, `zod` gibi bir kütüphane veya `class-validator`'ın ön yüz adaptasyonu ile varyant ve modifiye edici formlarındaki her bir alan için anlık validasyon uygulanacak.
+* Kullanıcı dostu hata mesajları, geçersiz girişler yapıldığında anında gösterilecek.
+
+Bu plan, kurumsal bir uygulama için gerekli olan karmaşık veri yönetimi özelliklerini projenize entegre etmenize yardımcı olacaktır.

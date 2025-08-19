@@ -1,6 +1,7 @@
-import React from 'react'
-import { Box, Stack, TextField, IconButton, Typography, Button, Divider, Switch, FormControlLabel } from '@mui/material'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Box, Stack, TextField, IconButton, Typography, Button, Divider, Switch, FormControlLabel, Autocomplete } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
+import { useMetaStore } from '../../stores/useMetaStore'
 
 export interface ModifierItem {
   id: string
@@ -23,6 +24,20 @@ interface ProductModifiersSectionProps {
 }
 
 const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ groups, onChange }) => {
+  const { modifierGroups, fetchModifierGroups } = useMetaStore()
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!modifierGroups || modifierGroups.length === 0) {
+      void fetchModifierGroups()
+    }
+  }, [modifierGroups, fetchModifierGroups])
+
+  const existingOptions = useMemo(() => modifierGroups?.map(g => ({
+    id: g.id,
+    label: g.name,
+  })) ?? [], [modifierGroups])
+
   const addGroup = () => {
     const next: ModifierGroup[] = [
       ...groups,
@@ -61,6 +76,21 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
     )))
   }
 
+  const addExistingGroup = (groupId: string) => {
+    const meta = modifierGroups.find(g => g.id === groupId)
+    if (!meta) return
+    // avoid duplicates by id
+    if (groups.some(g => g.id === meta.id)) return
+    const mapped: ModifierGroup = {
+      id: meta.id,
+      name: meta.name,
+      minSelect: meta.minSelection ?? 0 as any,
+      maxSelect: meta.maxSelection ?? 1 as any,
+      items: (meta.modifiers ?? []).map(m => ({ id: m.id, name: m.name, price: Number(m.price ?? 0), affectsStock: false })),
+    }
+    onChange([...groups, mapped])
+  }
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
@@ -69,9 +99,28 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
         </Typography>
       </Stack>
 
-      <Button variant="contained" startIcon={<Add />} onClick={addGroup} sx={{ mb: 2 }}>
-        Grup Ekle
-      </Button>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
+        <Button variant="contained" startIcon={<Add />} onClick={addGroup}>
+          Grup Ekle
+        </Button>
+        <Autocomplete
+          options={existingOptions}
+          getOptionLabel={(o) => o.label}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          renderOption={(props, option) => (
+            <li {...props} key={option.id}>{option.label}</li>
+          )}
+          value={existingOptions.find(o => o.id === selectedGroupId) ?? null}
+          onChange={(_, val) => {
+            setSelectedGroupId(val?.id ?? null)
+            if (val?.id) addExistingGroup(val.id)
+          }}
+          renderInput={(params) => (
+            <TextField {...params} label="Mevcut Grup Ekle" placeholder="Grup ara ve ekle" />
+          )}
+          sx={{ minWidth: 320 }}
+        />
+      </Stack>
 
       <Stack spacing={2}>
         {groups.length === 0 && (

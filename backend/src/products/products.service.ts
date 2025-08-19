@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -53,7 +53,7 @@ export class ProductsService {
       active: createProductDto.active ?? true,
       image: createProductDto.image,
       images: [],
-      allergens: [],
+      allergens: createProductDto.allergens ?? [],
       hasVariants: Boolean(createProductDto.variants?.length),
       hasModifiers: Boolean(createProductDto.modifierGroups?.length),
     };
@@ -71,46 +71,73 @@ export class ProductsService {
       };
     }
 
-    // Optional nested create for modifier groups and items via join table
+    // Optional nested create for modifier groups and items via join table.
+    // If incoming group has an existing id, connect it; otherwise create a new group.
     if (createProductDto.modifierGroups?.length) {
       data.modifierGroups = {
-        create: createProductDto.modifierGroups.map((g, idx) => ({
-          displayOrder: idx,
-          modifierGroup: {
-            create: {
-              name: g.name,
-              minSelection: g.minSelect ?? 0,
-              maxSelection: g.maxSelect ?? 1,
-              required: (g.minSelect ?? 0) > 0,
-              freeSelection: 0,
-              active: true,
-              modifiers: g.items?.length
-                ? {
-                    create: g.items.map((i, ii) => ({
-                      name: i.name,
-                      price: new Prisma.Decimal(i.price ?? 0),
-                      maxQuantity: 1,
-                      displayOrder: ii,
-                      active: true,
-                    }))
-                  }
-                : undefined,
+        create: await Promise.all(
+          createProductDto.modifierGroups.map(async (g, idx) => {
+            const anyG: any = g as any;
+            const incomingId: string | undefined = anyG.id;
+
+            if (incomingId) {
+              const exists = await this.prisma.modifierGroup.findUnique({ where: { id: incomingId } });
+              if (exists) {
+                return {
+                  displayOrder: idx,
+                  modifierGroup: { connect: { id: incomingId } },
+                } as any;
+              }
             }
-          }
-        }))
+
+            return {
+              displayOrder: idx,
+              modifierGroup: {
+                create: {
+                  name: g.name,
+                  minSelection: g.minSelect ?? 0,
+                  maxSelection: g.maxSelect ?? 1,
+                  required: (g.minSelect ?? 0) > 0,
+                  freeSelection: 0,
+                  active: true,
+                  modifiers: g.items?.length
+                    ? {
+                        create: g.items.map((i, ii) => ({
+                          name: i.name,
+                          price: new Prisma.Decimal(i.price ?? 0),
+                          maxQuantity: 1,
+                          displayOrder: ii,
+                          active: true,
+                        }))
+                      }
+                    : undefined,
+                }
+              }
+            } as any;
+          })
+        )
       } as any; // Prisma typing for nested create on join
     }
 
-    return this.prisma.product.create({ 
-      data,
-      include: {
-        category: true,
-        tax: true,
-        company: true,
-        variants: true,
-        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+    try {
+      return await this.prisma.product.create({ 
+        data,
+        include: {
+          category: true,
+          tax: true,
+          company: true,
+          variants: true,
+          modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+        }
+      });
+    } catch (e: any) {
+      // Prisma unique constraint
+      if (e?.code === 'P2002') {
+        // likely unique(companyId, code)
+        throw new ConflictException('Product code must be unique per company.');
       }
-    });
+      throw e;
+    }
   }
 
   async findAll() {
@@ -237,7 +264,7 @@ export class ProductsService {
       (data as Prisma.ProductUpdateInput).hasModifiers = Boolean(updateProductDto.modifierGroups?.length);
     }
 
-    // Use a transaction to update product and replace nested collections if provided
+    // Use a transaction to update product and MERGE nested collections if provided
     return this.prisma.$transaction(async (tx) => {
       // 1) Update scalar fields (and flags)
       await tx.product.update({
@@ -245,30 +272,84 @@ export class ProductsService {
         data,
       });
 
-      // 2) Replace variants if provided
+      // 2) Update allergens if provided
+      if (updateProductDto.allergens !== undefined) {
+        await tx.product.update({
+          where: { id },
+          data: { allergens: updateProductDto.allergens },
+        });
+      }
+
+      // 3) MERGE variants if provided (update by id, delete missing, create new)
       if (updateProductDto.variants !== undefined) {
-        await tx.productVariant.deleteMany({ where: { productId: id } });
-        if (updateProductDto.variants.length) {
-          await tx.productVariant.createMany({
-            data: updateProductDto.variants.map((v) => ({
-              productId: id,
-              name: v.name,
-              code: v.sku ?? v.name,
-              sku: v.sku ?? null,
-              price: new Prisma.Decimal(v.price as any),
-              active: true,
-              displayOrder: 0,
-            })),
-          });
+        const existing = await tx.productVariant.findMany({ where: { productId: id } });
+        const byId: Record<string, typeof existing[number]> = {};
+        for (const ev of existing) byId[ev.id] = ev as any;
+
+        const incoming = updateProductDto.variants;
+        const keepIds = new Set<string>();
+
+        for (let idx = 0; idx < (incoming?.length ?? 0); idx++) {
+          const v = incoming![idx];
+          if (v.id && byId[v.id]) {
+            keepIds.add(v.id);
+            await tx.productVariant.update({
+              where: { id: v.id },
+              data: {
+                name: v.name,
+                code: v.sku ?? v.name,
+                sku: v.sku ?? null,
+                price: v.price !== undefined ? new Prisma.Decimal(v.price as any) : undefined,
+                displayOrder: idx,
+                active: true,
+              }
+            });
+          } else {
+            const created = await tx.productVariant.create({
+              data: {
+                productId: id,
+                name: v.name,
+                code: v.sku ?? v.name,
+                sku: v.sku ?? null,
+                price: new Prisma.Decimal(v.price as any),
+                displayOrder: idx,
+                active: true,
+              }
+            });
+            keepIds.add(created.id);
+          }
+        }
+
+        // delete missing
+        const removeIds = existing.filter(e => !keepIds.has(e.id)).map(e => e.id);
+        if (removeIds.length) {
+          await tx.productVariant.deleteMany({ where: { id: { in: removeIds } } });
         }
       }
 
-      // 3) Replace modifier groups if provided (recreate groups and join)
+      // 4) MERGE modifier groups if provided (update/create groups, merge items, manage join table)
       if (updateProductDto.modifierGroups !== undefined) {
-        await tx.productModifierGroup.deleteMany({ where: { productId: id } });
-        if (updateProductDto.modifierGroups.length) {
-          for (let idx = 0; idx < updateProductDto.modifierGroups.length; idx++) {
-            const g = updateProductDto.modifierGroups[idx];
+        // existing joins
+        const existingJoins = await tx.productModifierGroup.findMany({ where: { productId: id } });
+        const keepGroupIds = new Set<string>();
+
+        for (let idx = 0; idx < updateProductDto.modifierGroups.length; idx++) {
+          const g = updateProductDto.modifierGroups[idx] as any;
+          let groupId = g.id as string | undefined;
+
+          if (groupId) {
+            // update group fields
+            await tx.modifierGroup.update({
+              where: { id: groupId },
+              data: {
+                name: g.name,
+                minSelection: g.minSelect ?? 0,
+                maxSelection: g.maxSelect ?? 1,
+                required: (g.minSelect ?? 0) > 0,
+                active: true,
+              }
+            });
+          } else {
             const createdGroup = await tx.modifierGroup.create({
               data: {
                 name: g.name,
@@ -277,32 +358,71 @@ export class ProductsService {
                 required: (g.minSelect ?? 0) > 0,
                 freeSelection: 0,
                 active: true,
-                modifiers: g.items?.length
-                  ? {
-                      create: g.items.map((i, ii) => ({
-                        name: i.name,
-                        price: new Prisma.Decimal(i.price ?? 0),
-                        maxQuantity: 1,
-                        displayOrder: ii,
-                        active: true,
-                      })),
-                    }
-                  : undefined,
               },
             });
+            groupId = createdGroup.id;
+          }
 
-            await tx.productModifierGroup.create({
-              data: {
-                productId: id,
-                modifierGroupId: createdGroup.id,
-                displayOrder: idx,
-              },
+          // Merge modifiers within group if provided
+          if (Array.isArray(g.items)) {
+            const existingMods = await tx.modifier.findMany({ where: { groupId } });
+            const modKeep = new Set<string>();
+            for (let ii = 0; ii < g.items.length; ii++) {
+              const i = g.items[ii];
+              if (i.id) {
+                await tx.modifier.update({
+                  where: { id: i.id },
+                  data: {
+                    name: i.name,
+                    price: new Prisma.Decimal(i.price ?? 0),
+                    displayOrder: ii,
+                    active: true,
+                  },
+                });
+                modKeep.add(i.id);
+              } else {
+                const createdMod = await tx.modifier.create({
+                  data: {
+                    groupId,
+                    name: i.name,
+                    price: new Prisma.Decimal(i.price ?? 0),
+                    maxQuantity: 1,
+                    displayOrder: ii,
+                    active: true,
+                  },
+                });
+                modKeep.add(createdMod.id);
+              }
+            }
+            const removeModIds = existingMods.filter(m => !modKeep.has(m.id)).map(m => m.id);
+            if (removeModIds.length) {
+              await tx.modifier.deleteMany({ where: { id: { in: removeModIds } } });
+            }
+          }
+
+          // Upsert join with display order
+          await tx.productModifierGroup.upsert({
+            where: { productId_modifierGroupId: { productId: id, modifierGroupId: groupId! } },
+            update: { displayOrder: idx },
+            create: { productId: id, modifierGroupId: groupId!, displayOrder: idx },
+          });
+          keepGroupIds.add(groupId!);
+        }
+
+        // Remove old joins not present anymore
+        const removeJoins = existingJoins
+          .filter(j => !keepGroupIds.has(j.modifierGroupId))
+          .map(j => ({ productId: j.productId, modifierGroupId: j.modifierGroupId }));
+        if (removeJoins.length) {
+          for (const key of removeJoins) {
+            await tx.productModifierGroup.delete({
+              where: { productId_modifierGroupId: key },
             });
           }
         }
       }
 
-      // 4) Return the updated product with relations
+      // 5) Return the updated product with relations
       const updated = await tx.product.findUnique({
         where: { id, deletedAt: null },
         include: {
@@ -408,6 +528,19 @@ export class ProductsService {
         { isDefault: 'desc' },
         { rate: 'asc' }
       ]
+    });
+  }
+
+  async getModifierGroups() {
+    return this.prisma.modifierGroup.findMany({
+      where: { deletedAt: null, active: true },
+      include: {
+        modifiers: {
+          where: { deletedAt: null, active: true },
+          orderBy: { displayOrder: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
     });
   }
 }
