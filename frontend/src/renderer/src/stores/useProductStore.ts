@@ -35,6 +35,34 @@ export interface Product {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+  // Optional relations returned by backend when included
+  variants?: Array<{
+    id: string;
+    name: string;
+    sku?: string | null;
+    code?: string | null;
+    price: number | string;
+    active?: boolean;
+    displayOrder?: number;
+  }>;
+  modifierGroups?: Array<{
+    displayOrder?: number;
+    modifierGroup: {
+      id: string;
+      name: string;
+      minSelection?: number;
+      maxSelection?: number;
+      required?: boolean;
+      active?: boolean;
+      modifiers?: Array<{
+        id: string;
+        name: string;
+        price: number | string;
+        active?: boolean;
+        displayOrder?: number;
+      }>;
+    }
+  }>;
 }
 
 // UI/store-level types for advanced product structures

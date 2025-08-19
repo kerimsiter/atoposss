@@ -52,12 +52,14 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
                 value={v.name}
                 onChange={(e) => updateVariant(v.id, { name: e.target.value })}
                 fullWidth
+                placeholder="Örn: Büyük"
               />
               <TextField
                 label="SKU"
                 value={v.sku || ''}
                 onChange={(e) => updateVariant(v.id, { sku: e.target.value })}
                 sx={{ minWidth: 180 }}
+                placeholder="Örn: VAR-BYG"
               />
               <TextField
                 label="Fiyat"
@@ -65,6 +67,7 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
                 value={v.price ?? ''}
                 onChange={(e) => updateVariant(v.id, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
                 sx={{ minWidth: 160 }}
+                placeholder="Örn: 19.90"
               />
               <IconButton color="error" onClick={() => removeVariant(v.id)} aria-label="Varyantı sil">
                 <Delete />

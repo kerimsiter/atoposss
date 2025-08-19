@@ -1,7 +1,7 @@
 import React from 'react'
 import { Tabs, Tab, Box } from '@mui/material'
 
-export type ProductFormTabKey = 'image' | 'basic' | 'pricing' | 'categories' | 'stock' | 'variants' | 'modifiers'
+export type ProductFormTabKey = 'general' | 'variants' | 'modifiers'
 
 interface ProductFormTabsProps {
   value: ProductFormTabKey
@@ -22,13 +22,9 @@ const ProductFormTabs: React.FC<ProductFormTabsProps> = ({ value, onChange }) =>
         scrollButtons
         allowScrollButtonsMobile
       >
-        <Tab value="image" label="Resim" />
-        <Tab value="basic" label="Temel Bilgiler" />
-        <Tab value="pricing" label="Fiyatlandırma" />
-        <Tab value="categories" label="Kategori & Vergi" />
-        <Tab value="stock" label="Stok" />
+        <Tab value="general" label="Genel" />
         <Tab value="variants" label="Varyantlar" />
-        <Tab value="modifiers" label="Modifiye Ediciler" />
+        <Tab value="modifiers" label="Ek Seçenekler" />
       </Tabs>
     </Box>
   )

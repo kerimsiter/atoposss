@@ -229,14 +229,95 @@ export class ProductsService {
       data.image = updateProductDto.image;
     }
 
-    return this.prisma.product.update({
-      where: { id },
-      data,
-      include: {
-        category: true,
-        tax: true,
-        company: true,
-      },
+    // Update flags if variant/modifier arrays explicitly provided
+    if (updateProductDto.variants !== undefined) {
+      (data as Prisma.ProductUpdateInput).hasVariants = Boolean(updateProductDto.variants?.length);
+    }
+    if (updateProductDto.modifierGroups !== undefined) {
+      (data as Prisma.ProductUpdateInput).hasModifiers = Boolean(updateProductDto.modifierGroups?.length);
+    }
+
+    // Use a transaction to update product and replace nested collections if provided
+    return this.prisma.$transaction(async (tx) => {
+      // 1) Update scalar fields (and flags)
+      await tx.product.update({
+        where: { id },
+        data,
+      });
+
+      // 2) Replace variants if provided
+      if (updateProductDto.variants !== undefined) {
+        await tx.productVariant.deleteMany({ where: { productId: id } });
+        if (updateProductDto.variants.length) {
+          await tx.productVariant.createMany({
+            data: updateProductDto.variants.map((v) => ({
+              productId: id,
+              name: v.name,
+              code: v.sku ?? v.name,
+              sku: v.sku ?? null,
+              price: new Prisma.Decimal(v.price as any),
+              active: true,
+              displayOrder: 0,
+            })),
+          });
+        }
+      }
+
+      // 3) Replace modifier groups if provided (recreate groups and join)
+      if (updateProductDto.modifierGroups !== undefined) {
+        await tx.productModifierGroup.deleteMany({ where: { productId: id } });
+        if (updateProductDto.modifierGroups.length) {
+          for (let idx = 0; idx < updateProductDto.modifierGroups.length; idx++) {
+            const g = updateProductDto.modifierGroups[idx];
+            const createdGroup = await tx.modifierGroup.create({
+              data: {
+                name: g.name,
+                minSelection: g.minSelect ?? 0,
+                maxSelection: g.maxSelect ?? 1,
+                required: (g.minSelect ?? 0) > 0,
+                freeSelection: 0,
+                active: true,
+                modifiers: g.items?.length
+                  ? {
+                      create: g.items.map((i, ii) => ({
+                        name: i.name,
+                        price: new Prisma.Decimal(i.price ?? 0),
+                        maxQuantity: 1,
+                        displayOrder: ii,
+                        active: true,
+                      })),
+                    }
+                  : undefined,
+              },
+            });
+
+            await tx.productModifierGroup.create({
+              data: {
+                productId: id,
+                modifierGroupId: createdGroup.id,
+                displayOrder: idx,
+              },
+            });
+          }
+        }
+      }
+
+      // 4) Return the updated product with relations
+      const updated = await tx.product.findUnique({
+        where: { id, deletedAt: null },
+        include: {
+          category: true,
+          tax: true,
+          company: true,
+          variants: true,
+          modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+        },
+      });
+
+      if (!updated) {
+        throw new NotFoundException(`Product with ID ${id} not found after update.`);
+      }
+      return updated;
     });
   }
 

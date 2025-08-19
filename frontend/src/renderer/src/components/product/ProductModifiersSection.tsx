@@ -65,7 +65,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
-          Modifiye Edici Grupları
+          Ek Seçenek Grupları
         </Typography>
       </Stack>
 
@@ -86,6 +86,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   value={g.name}
                   onChange={(e) => patchGroup(g.id, { name: e.target.value })}
                   fullWidth
+                  placeholder="Örn: İçecek Boyutu"
                 />
                 <TextField
                   label="Min Seçim"
@@ -93,6 +94,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   value={g.minSelect ?? 0}
                   onChange={(e) => patchGroup(g.id, { minSelect: Number(e.target.value) })}
                   sx={{ minWidth: 160 }}
+                  placeholder="Örn: 0"
                 />
                 <TextField
                   label="Maks Seçim"
@@ -100,6 +102,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   value={g.maxSelect ?? 1}
                   onChange={(e) => patchGroup(g.id, { maxSelect: Number(e.target.value) })}
                   sx={{ minWidth: 160 }}
+                  placeholder="Örn: 1"
                 />
                 <IconButton color="error" onClick={() => removeGroup(g.id)} aria-label="Grubu sil">
                   <Delete />
@@ -119,6 +122,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                         value={i.name}
                         onChange={(e) => patchItem(g.id, i.id, { name: e.target.value })}
                         fullWidth
+                        placeholder="Örn: Büyük"
                       />
                       <TextField
                         label="Fiyat"
@@ -126,6 +130,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                         value={i.price ?? 0}
                         onChange={(e) => patchItem(g.id, i.id, { price: Number(e.target.value) })}
                         sx={{ minWidth: 160 }}
+                        placeholder="Örn: 5.00"
                       />
                       <FormControlLabel
                         control={

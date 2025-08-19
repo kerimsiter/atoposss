@@ -35,7 +35,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   const isEditMode = !!product;
 
   // Tabs & advanced sections local state (UI only for now)
-  const [activeTab, setActiveTab] = useState<ProductFormTabKey>('image');
+  const [activeTab, setActiveTab] = useState<ProductFormTabKey>('general');
   const [variants, setVariants] = useState<VariantItem[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
 
@@ -82,9 +82,50 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           unit: product.unit,
           image: product.image
         });
-        // Optionally hydrate tabs data from product when backend supports it
-        setVariants([]);
-        setModifierGroups([]);
+        // Hydrate tabs data from backend relations if available
+        try {
+          const srvVariants = (product as any).variants as any[] | undefined;
+          if (Array.isArray(srvVariants) && srvVariants.length) {
+            setVariants(
+              srvVariants.map(v => ({
+                id: v.id,
+                name: v.name ?? '',
+                sku: v.sku ?? '',
+                price: v.price !== undefined && v.price !== null ? Number(v.price) : undefined,
+              }))
+            );
+          } else {
+            setVariants([]);
+          }
+
+          const srvPmgs = (product as any).modifierGroups as any[] | undefined;
+          if (Array.isArray(srvPmgs) && srvPmgs.length) {
+            const groups = srvPmgs
+              .map(pg => pg?.modifierGroup)
+              .filter(Boolean)
+              .map((g: any) => ({
+                id: g.id,
+                name: g.name ?? '',
+                minSelect: g.minSelection ?? 0,
+                maxSelect: g.maxSelection ?? 1,
+                items: Array.isArray(g.modifiers)
+                  ? g.modifiers.map((m: any) => ({
+                      id: m.id,
+                      name: m.name ?? '',
+                      price: m.price !== undefined && m.price !== null ? Number(m.price) : 0,
+                      affectsStock: false,
+                    }))
+                  : [],
+              }));
+            setModifierGroups(groups);
+          } else {
+            setModifierGroups([]);
+          }
+        } catch (e) {
+          console.warn('Product hydrate warning:', e);
+          setVariants([]);
+          setModifierGroups([]);
+        }
       } else {
         // Add mode - reset form
         setFormData({
@@ -104,7 +145,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       }
       setFormErrors({});
       clearError();
-      setActiveTab('image');
+      setActiveTab('general');
     }
   }, [open, product, categories, taxes, clearError]);
 
@@ -251,55 +292,57 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
             <Stack spacing={3}>
               <ProductFormTabs value={activeTab} onChange={setActiveTab} />
 
-              {activeTab === 'image' && (
+              {activeTab === 'general' && (
                 <Box>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                    <ImageIcon color="primary" />
-                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
-                      Ürün Resmi
-                    </Typography>
-                  </Stack>
-                  <ModernImageUpload
-                    value={formData.image}
-                    onChange={handleImageChange}
-                    disabled={loading}
-                  />
+                  <Box sx={{ mb: 3 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                      <ImageIcon color="primary" />
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
+                        Ürün Resmi
+                      </Typography>
+                    </Stack>
+                    <ModernImageUpload
+                      value={formData.image}
+                      onChange={handleImageChange}
+                      disabled={loading}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <ProductFormBasicInfo
+                      formData={formData}
+                      handleInputChange={handleInputChange}
+                      formErrors={formErrors}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <ProductFormPricing
+                      formData={formData}
+                      handleInputChange={handleInputChange}
+                      formErrors={formErrors}
+                      unitOptions={unitOptions}
+                    />
+                  </Box>
+
+                  <Box sx={{ mb: 3 }}>
+                    <ProductFormCategories
+                      formData={formData}
+                      handleInputChange={handleInputChange}
+                      formErrors={formErrors}
+                      categories={categories}
+                      taxes={taxes}
+                      metaLoading={metaLoading}
+                    />
+                  </Box>
+
+                  <Box>
+                    <ProductFormStock
+                      trackStock={formData.trackStock}
+                      handleSwitchChange={handleSwitchChange}
+                    />
+                  </Box>
                 </Box>
-              )}
-
-              {activeTab === 'basic' && (
-                <ProductFormBasicInfo
-                  formData={formData}
-                  handleInputChange={handleInputChange}
-                  formErrors={formErrors}
-                />
-              )}
-
-              {activeTab === 'pricing' && (
-                <ProductFormPricing
-                  formData={formData}
-                  handleInputChange={handleInputChange}
-                  formErrors={formErrors}
-                  unitOptions={unitOptions}
-                />
-              )}
-
-              {activeTab === 'categories' && (
-                <ProductFormCategories
-                  formData={formData}
-                  handleInputChange={handleInputChange}
-                  formErrors={formErrors}
-                  categories={categories}
-                  taxes={taxes}
-                  metaLoading={metaLoading}
-                />
-              )}
-
-              {activeTab === 'stock' && (
-                <ProductFormStock
-                  trackStock={formData.trackStock}
-                  handleSwitchChange={handleSwitchChange}
-                />
               )}
 
               {activeTab === 'variants' && (
