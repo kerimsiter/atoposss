@@ -19,8 +19,8 @@ import {
   CategoryOutlined as CategoryIcon
 } from '@mui/icons-material';
 import { Product, useProductStore } from '../stores/useProductStore';
-import ProductList from '../components/ProductList';
-import ProductForm from '../components/ProductForm';
+import ProductList from '../components/product/ProductList';
+import ProductForm from '../components/product/ProductForm';
 import ModernCard from '../components/ui/ModernCard';
 import ModernButton from '../components/ui/ModernButton';
 

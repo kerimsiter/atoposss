@@ -28,10 +28,10 @@ import {
   Inventory as InventoryIcon,
   LocalOffer as PriceIcon
 } from '@mui/icons-material';
-import { Product, useProductStore } from '../stores/useProductStore';
-import { formatPrice } from '../utils/formatters';
-import ModernTextField from './ui/ModernTextField';
-import ModernChip from './ui/ModernChip';
+import { Product, useProductStore } from '../../stores/useProductStore';
+import { formatPrice } from '../../utils/formatters';
+import ModernTextField from '../ui/ModernTextField';
+import ModernChip from '../ui/ModernChip';
 
 interface ProductListProps {
   onEditProduct: (product: Product) => void;
