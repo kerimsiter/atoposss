@@ -1,18 +1,19 @@
 import { z } from 'zod';
+import axios from 'axios';
 
 export const variantSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1, 'Varyant adı zorunludur'),
   sku: z.string().trim().optional().or(z.literal('')),
   price: z
-    .number({ invalid_type_error: 'Fiyat sayı olmalıdır' })
+    .number()
     .min(0, 'Fiyat 0 veya daha büyük olmalı'),
 });
 
 export const modifierItemSchema = z.object({
   id: z.string().optional(),
   name: z.string().trim().min(1, 'Seçenek adı zorunludur'),
-  price: z.number({ invalid_type_error: 'Fiyat sayı olmalıdır' }).min(0, 'Fiyat 0 veya daha büyük olmalı').optional(),
+  price: z.number().min(0, 'Fiyat 0 veya daha büyük olmalı').optional(),
   affectsStock: z.boolean().optional(),
 });
 
@@ -41,7 +42,26 @@ export const allergensSchema = z
 
 export const productBaseSchema = z.object({
   name: z.string().trim().min(1, 'Ürün adı gereklidir'),
-  code: z.string().trim().min(1, 'Ürün kodu gereklidir'),
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Ürün kodu gereklidir')
+    .refine(
+      async (code) => {
+        if (!code) return true;
+        const API_BASE_URL = 'http://localhost:3000';
+        try {
+          const res = await axios.get(
+            `${API_BASE_URL}/products/check-code-uniqueness/${encodeURIComponent(code)}/auto`
+          );
+          return Boolean(res.data?.isUnique);
+        } catch (e) {
+          // Backend erişilemezse formu bloklamayalım; create sırasında backend zaten kontrol edecek
+          return true;
+        }
+      },
+      'Bu ürün kodu zaten kullanılıyor'
+    ),
   barcode: z.string().optional(),
   description: z.string().optional(),
   basePrice: z.number().min(0.01, 'Fiyat 0\'dan büyük olmalıdır'),

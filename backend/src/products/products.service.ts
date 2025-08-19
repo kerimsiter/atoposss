@@ -543,4 +543,31 @@ export class ProductsService {
       orderBy: { name: 'asc' },
     });
   }
+
+  // Check if a product code is unique within a company. If companyId is not provided,
+  // it defaults to the first active company.
+  async isCodeUnique(code: string, companyId?: string): Promise<boolean> {
+    let effectiveCompanyId = companyId ?? null;
+    if (!effectiveCompanyId || effectiveCompanyId === 'auto') {
+      const firstCompany = await this.prisma.company.findFirst({
+        where: { deletedAt: null },
+        orderBy: { name: 'asc' },
+      });
+      if (!firstCompany) {
+        // If there is no company, treat as unique to avoid blocking UI; creation will fail anyway.
+        return true;
+      }
+      effectiveCompanyId = firstCompany.id;
+    }
+
+    const existing = await this.prisma.product.findFirst({
+      where: {
+        code,
+        companyId: effectiveCompanyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    return !existing;
+  }
 }

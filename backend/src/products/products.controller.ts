@@ -7,6 +7,8 @@ import {
   Param,
   Delete,
   Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -24,6 +26,17 @@ export class ProductsController {
   @Get()
   findAll() {
     return this.productsService.findAll();
+  }
+
+  // Check uniqueness of product code per company
+  @Get('check-code-uniqueness/:code/:companyId')
+  @HttpCode(HttpStatus.OK)
+  async checkCodeUniqueness(
+    @Param('code') code: string,
+    @Param('companyId') companyId: string,
+  ) {
+    const isUnique = await this.productsService.isCodeUnique(code, companyId);
+    return { isUnique };
   }
 
   @Get(':id')

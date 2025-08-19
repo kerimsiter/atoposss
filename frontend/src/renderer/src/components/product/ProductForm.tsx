@@ -323,8 +323,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
       };
 
-      // Final Zod parse before submit
-      const parsed = productFullSchema.safeParse({
+      // Final Zod parse before submit (async, because schema has async refinements)
+      const parsed = await productFullSchema.safeParseAsync({
         ...payload,
         // Ensure numbers are numbers
         basePrice: Number(payload.basePrice),
