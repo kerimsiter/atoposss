@@ -129,3 +129,4 @@ temp/
 # Uploads
 uploads/
 package-lock.json
+app\generated
