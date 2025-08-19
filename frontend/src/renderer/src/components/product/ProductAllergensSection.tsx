@@ -5,6 +5,7 @@ export interface ProductAllergensSectionProps {
   value: string[]
   onChange: (next: string[]) => void
   disabled?: boolean
+  error?: string
 }
 
 // Common allergen suggestions
@@ -24,7 +25,7 @@ const ALLERGEN_OPTIONS: string[] = [
   'Sülfit',
 ]
 
-const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ value, onChange, disabled }) => {
+const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ value, onChange, disabled, error }) => {
   return (
     <Box>
       <Stack spacing={1} sx={{ mb: 1 }}>
@@ -62,7 +63,14 @@ const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ value
           })
         }
         renderInput={(params) => (
-          <TextField {...params} label="Alerjenler" placeholder="Alerjen ekle" disabled={!!disabled} />
+          <TextField
+            {...params}
+            label="Alerjenler"
+            placeholder="Alerjen ekle"
+            disabled={!!disabled}
+            error={Boolean(error)}
+            helperText={error}
+          />
         )}
         disabled={!!disabled}
       />

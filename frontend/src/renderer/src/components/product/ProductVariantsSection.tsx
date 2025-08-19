@@ -12,9 +12,10 @@ export interface VariantItem {
 interface ProductVariantsSectionProps {
   variants: VariantItem[]
   onChange: (next: VariantItem[]) => void
+  errors?: Record<string, { name?: string; sku?: string; price?: string }>
 }
 
-const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variants, onChange }) => {
+const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variants, onChange, errors }) => {
   const addVariant = () => {
     const next = [...variants, { id: crypto.randomUUID(), name: '', sku: '', price: undefined }]
     onChange(next)
@@ -53,6 +54,8 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
                 onChange={(e) => updateVariant(v.id, { name: e.target.value })}
                 fullWidth
                 placeholder="Örn: Büyük"
+                error={Boolean(errors?.[v.id]?.name)}
+                helperText={errors?.[v.id]?.name}
               />
               <TextField
                 label="SKU"
@@ -60,6 +63,8 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
                 onChange={(e) => updateVariant(v.id, { sku: e.target.value })}
                 sx={{ minWidth: 180 }}
                 placeholder="Örn: VAR-BYG"
+                error={Boolean(errors?.[v.id]?.sku)}
+                helperText={errors?.[v.id]?.sku}
               />
               <TextField
                 label="Fiyat"
@@ -68,6 +73,8 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
                 onChange={(e) => updateVariant(v.id, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
                 sx={{ minWidth: 160 }}
                 placeholder="Örn: 19.90"
+                error={Boolean(errors?.[v.id]?.price)}
+                helperText={errors?.[v.id]?.price}
               />
               <IconButton color="error" onClick={() => removeVariant(v.id)} aria-label="Varyantı sil">
                 <Delete />

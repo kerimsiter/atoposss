@@ -22,6 +22,7 @@ import ProductFormTabs, { ProductFormTabKey } from './ProductFormTabs';
 import ProductVariantsSection, { VariantItem } from './ProductVariantsSection';
 import ProductModifiersSection, { ModifierGroup } from './ProductModifiersSection';
 import ProductAllergensSection from './ProductAllergensSection';
+import { productFullSchema, variantSchema, modifierGroupSchema } from '../../validation/productSchemas';
 
 interface ProductFormProps {
   open: boolean;
@@ -55,6 +56,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   });
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [variantErrors, setVariantErrors] = useState<Record<string, { name?: string; sku?: string; price?: string }>>({});
+  const [modifierErrors, setModifierErrors] = useState<Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>>({});
+  const [allergensError, setAllergensError] = useState<string | undefined>(undefined);
 
   // Fetch meta data when dialog opens
   useEffect(() => {
@@ -172,6 +176,56 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     }
   };
 
+  // ------ Advanced validation helpers (Zod) ------
+  const validateVariants = (list: VariantItem[]) => {
+    const nextErr: Record<string, { name?: string; sku?: string; price?: string }> = {};
+    list.forEach(v => {
+      const parsed = variantSchema.safeParse({ ...v, price: v.price });
+      if (!parsed.success) {
+        parsed.error.issues.forEach(iss => {
+          const key = iss.path[0] as 'name' | 'sku' | 'price';
+          nextErr[v.id] = { ...nextErr[v.id], [key]: iss.message };
+        });
+      }
+    });
+    setVariantErrors(nextErr);
+    return nextErr;
+  };
+
+  const validateModifierGroups = (groups: ModifierGroup[]) => {
+    const nextErr: Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }> = {};
+    groups.forEach(g => {
+      const parsed = modifierGroupSchema.safeParse({
+        ...g,
+        items: g.items?.map(i => ({ ...i, price: i.price })) ?? [],
+      });
+      if (!parsed.success) {
+        parsed.error.issues.forEach(iss => {
+          const path0 = iss.path[0] as string | undefined;
+          if (path0 === 'items' && typeof iss.path[1] === 'number') {
+            const idx = iss.path[1] as number;
+            const item = g.items[idx];
+            if (item) {
+              const field = (iss.path[2] as 'name' | 'price') ?? 'name';
+              nextErr[g.id] = { ...nextErr[g.id], items: { ...(nextErr[g.id]?.items ?? {}), [item.id]: { ...(nextErr[g.id]?.items?.[item.id] ?? {}), [field]: iss.message } } };
+            }
+          } else if (path0 === 'name' || path0 === 'minSelect' || path0 === 'maxSelect') {
+            nextErr[g.id] = { ...nextErr[g.id], [path0]: iss.message } as any;
+          }
+        });
+      }
+    });
+    setModifierErrors(nextErr);
+    return nextErr;
+  };
+
+  const validateAllergens = (list: string[]) => {
+    // productFullSchema includes allergens; validate a minimal object
+    const parsed = productFullSchema.pick({ allergens: true }).safeParse({ allergens: list });
+    setAllergensError(parsed.success ? undefined : parsed.error.issues[0]?.message);
+    return parsed.success;
+  };
+
   const handleSwitchChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -185,9 +239,28 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     setFormData(prev => ({ ...prev, image }));
   };
 
+  // Instant validation effects for advanced sections
+  useEffect(() => {
+    if (!open) return;
+    validateVariants(variants);
+  }, [open, variants]);
+
+  useEffect(() => {
+    if (!open) return;
+    validateModifierGroups(modifierGroups);
+  }, [open, modifierGroups]);
+
+  useEffect(() => {
+    if (!open) return;
+    validateAllergens(allergens);
+  }, [open, allergens]);
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    const advancedIssues: string[] = [];
+    // Reset advanced error maps
+    setVariantErrors({});
+    setModifierErrors({});
+    setAllergensError(undefined);
 
     if (!formData.name.trim()) {
       errors.name = 'Ürün adı gereklidir';
@@ -215,35 +288,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       errors.taxId = 'Vergi oranı seçimi gereklidir';
     }
 
-    // Advanced: variants validation
-    variants.forEach((v, idx) => {
-      const name = v.name?.trim();
-      const priceNum = typeof v.price === 'number' ? v.price : NaN;
-      if (!name) advancedIssues.push(`Varyant #${idx + 1}: Ad alanı zorunlu`);
-      if (!(priceNum >= 0)) advancedIssues.push(`Varyant #${idx + 1}: Fiyat 0 veya daha büyük olmalı`);
-    });
-
-    // Advanced: modifier groups validation
-    modifierGroups.forEach((g, gi) => {
-      const name = g.name?.trim();
-      if (!name) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: Ad alanı zorunlu`);
-      const minSel = Number(g.minSelect ?? 0);
-      const maxSel = Number(g.maxSelect ?? 1);
-      const count = g.items?.length ?? 0;
-      if (minSel < 0) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim negatif olamaz`);
-      if (maxSel < 0) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: maksimum seçim negatif olamaz`);
-      if (minSel > maxSel) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim maksimumdan büyük olamaz`);
-      if (minSel > count) advancedIssues.push(`Ek Seçenek Grubu #${gi + 1}: minimum seçim öğe sayısından fazla olamaz`);
-      g.items.forEach((i, ii) => {
-        const iname = i.name?.trim();
-        const iprice = typeof i.price === 'number' ? i.price : NaN;
-        if (!iname) advancedIssues.push(`Ek Seçenek #${gi + 1}.${ii + 1}: Ad alanı zorunlu`);
-        if (!(iprice >= 0)) advancedIssues.push(`Ek Seçenek #${gi + 1}.${ii + 1}: Fiyat 0 veya daha büyük olmalı`);
-      });
-    });
-
-    if (advancedIssues.length) {
-      errors.advanced = advancedIssues.join('\n');
+    // Advanced: Zod validation for arrays
+    const vErr = validateVariants(variants);
+    const mErr = validateModifierGroups(modifierGroups);
+    validateAllergens(allergens);
+    if (Object.keys(vErr).length || Object.keys(mErr).length || allergensError) {
+      // Keep a generic advanced flag to show an Alert if needed
+      errors.advanced = 'Gelişmiş alanlarda hatalar var. Lütfen ilgili sekmeleri kontrol edin.';
     }
 
     setFormErrors(errors);
@@ -284,6 +335,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         variants: mappedVariants.length ? mappedVariants : undefined,
         modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
       };
+
+      // Final Zod parse before submit
+      const parsed = productFullSchema.safeParse({
+        ...payload,
+        // Ensure numbers are numbers
+        basePrice: Number(payload.basePrice),
+      });
+      if (!parsed.success) {
+        // Map base errors into formErrors
+        const nextErr: Record<string, string> = {};
+        parsed.error.issues.forEach(iss => {
+          const k = iss.path[0] as string;
+          if (k) nextErr[k] = iss.message;
+        });
+        setFormErrors(prev => ({ ...prev, ...nextErr }));
+        return;
+      }
 
       if (product) {
         await updateProduct(product.id, payload);
@@ -404,15 +472,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
               )}
 
               {activeTab === 'variants' && (
-                <ProductVariantsSection variants={variants} onChange={setVariants} />
+                <ProductVariantsSection variants={variants} onChange={setVariants} errors={variantErrors} />
               )}
 
               {activeTab === 'modifiers' && (
-                <ProductModifiersSection groups={modifierGroups} onChange={setModifierGroups} />
+                <ProductModifiersSection groups={modifierGroups} onChange={setModifierGroups} errors={modifierErrors} />
               )}
 
               {activeTab === 'allergens' && (
-                <ProductAllergensSection value={allergens} onChange={setAllergens} disabled={loading} />
+                <ProductAllergensSection value={allergens} onChange={setAllergens} disabled={loading} error={allergensError} />
               )}
             </Stack>
           </Box>

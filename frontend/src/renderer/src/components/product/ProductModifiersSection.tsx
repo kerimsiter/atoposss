@@ -21,9 +21,10 @@ export interface ModifierGroup {
 interface ProductModifiersSectionProps {
   groups: ModifierGroup[]
   onChange: (next: ModifierGroup[]) => void
+  errors?: Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>
 }
 
-const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ groups, onChange }) => {
+const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ groups, onChange, errors }) => {
   const { modifierGroups, fetchModifierGroups } = useMetaStore()
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
 
@@ -136,6 +137,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   onChange={(e) => patchGroup(g.id, { name: e.target.value })}
                   fullWidth
                   placeholder="Örn: İçecek Boyutu"
+                  error={Boolean(errors?.[g.id]?.name)}
+                  helperText={errors?.[g.id]?.name}
                 />
                 <TextField
                   label="Min Seçim"
@@ -144,6 +147,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   onChange={(e) => patchGroup(g.id, { minSelect: Number(e.target.value) })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 0"
+                  error={Boolean(errors?.[g.id]?.minSelect)}
+                  helperText={errors?.[g.id]?.minSelect}
                 />
                 <TextField
                   label="Maks Seçim"
@@ -152,6 +157,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                   onChange={(e) => patchGroup(g.id, { maxSelect: Number(e.target.value) })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 1"
+                  error={Boolean(errors?.[g.id]?.maxSelect)}
+                  helperText={errors?.[g.id]?.maxSelect}
                 />
                 <IconButton color="error" onClick={() => removeGroup(g.id)} aria-label="Grubu sil">
                   <Delete />
@@ -172,6 +179,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                         onChange={(e) => patchItem(g.id, i.id, { name: e.target.value })}
                         fullWidth
                         placeholder="Örn: Büyük"
+                        error={Boolean(errors?.[g.id]?.items?.[i.id]?.name)}
+                        helperText={errors?.[g.id]?.items?.[i.id]?.name}
                       />
                       <TextField
                         label="Fiyat"
@@ -180,6 +189,8 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
                         onChange={(e) => patchItem(g.id, i.id, { price: Number(e.target.value) })}
                         sx={{ minWidth: 160 }}
                         placeholder="Örn: 5.00"
+                        error={Boolean(errors?.[g.id]?.items?.[i.id]?.price)}
+                        helperText={errors?.[g.id]?.items?.[i.id]?.price}
                       />
                       <FormControlLabel
                         control={
