@@ -622,4 +622,20 @@ export class ProductsService {
     });
     return !existing;
   }
+
+  // Aggregate product statistics (total, active, stockTracked)
+  // If companyId is not provided, count across ALL companies (global view)
+  async getStats(companyId?: string) {
+    const whereBase: Prisma.ProductWhereInput = companyId
+      ? { deletedAt: null, companyId }
+      : { deletedAt: null };
+
+    const [total, active, stockTracked] = await this.prisma.$transaction([
+      this.prisma.product.count({ where: whereBase }),
+      this.prisma.product.count({ where: { AND: [whereBase, { active: true }] } }),
+      this.prisma.product.count({ where: { AND: [whereBase, { trackStock: true }] } }),
+    ]);
+
+    return { total, active, stockTracked };
+  }
 }

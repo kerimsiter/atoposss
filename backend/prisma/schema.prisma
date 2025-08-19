@@ -316,8 +316,12 @@ model Product {
   @@unique([companyId, code])
   @@index([companyId])
   @@index([categoryId])
-  @@index([barcode])
+  @@unique([barcode])
   @@index([deletedAt])
+  @@index([active])
+  @@index([companyId, active])
+  @@index([companyId, deletedAt])
+  @@index([companyId, categoryId])
 }
 
 enum ProductUnit {

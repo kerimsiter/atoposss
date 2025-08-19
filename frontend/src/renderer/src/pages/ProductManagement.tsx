@@ -1,4 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense } from 'react';
+import axios from 'axios';
 import {
   Box,
   Typography,
@@ -25,10 +26,11 @@ import ModernButton from '../components/ui/ModernButton';
 const ProductForm = lazy(() => import('../components/product/ProductForm'));
 
 const ProductManagement: React.FC = () => {
-  const { products, fetchProducts, loading, error, clearError, pagination } = useProductStore();
+  const { fetchProducts, loading, error, clearError, pagination } = useProductStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [stats, setStats] = useState<{ total: number; active: number; stockTracked: number }>({ total: 0, active: 0, stockTracked: 0 });
 
   // Fetch products when component mounts (server-side pagination)
   useEffect(() => {
@@ -41,6 +43,19 @@ const ProductManagement: React.FC = () => {
       setSnackbarOpen(true);
     }
   }, [error]);
+
+  // Fetch product stats for dashboard cards
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await axios.get('http://localhost:3000/products/stats');
+        setStats(res.data);
+      } catch (e) {
+        console.error('Failed to fetch product stats', e);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleAddProduct = () => {
     setSelectedProduct(null);
@@ -68,10 +83,10 @@ const ProductManagement: React.FC = () => {
     clearError();
   };
 
-  // Calculate stats
-  const activeProducts = products.filter(p => p.active).length; // TODO: backend meta (todo-5)
-  const stockTrackedProducts = products.filter(p => p.trackStock).length; // TODO: backend meta (todo-5)
-  const totalProducts = pagination.total;
+  // Dashboard stats from backend
+  const totalProducts = stats.total;
+  const activeProducts = stats.active;
+  const stockTrackedProducts = stats.stockTracked;
 
   return (
     <Box sx={{ 

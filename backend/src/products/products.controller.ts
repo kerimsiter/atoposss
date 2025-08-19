@@ -74,4 +74,10 @@ export class ProductsController {
   getModifierGroups() {
     return this.productsService.getModifierGroups();
   }
+
+  // Dashboard-like aggregate stats for products
+  @Get('stats')
+  getStats(@Query('companyId') companyId?: string) {
+    return this.productsService.getStats(companyId);
+  }
 }
