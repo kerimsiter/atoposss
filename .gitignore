@@ -43,12 +43,13 @@ lerna-debug.log*
 pids
 *.pid
 *.seed
-*.pid.lock
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-/app/generated/prisma
+# Cross-directory ignore rules
+*.pid.lock
+backend/app/generated/
 frontend/package-lock.json
 backend/package-lock.json
-frontend/out/renderer/assets
+frontend/out/renderer/assets/

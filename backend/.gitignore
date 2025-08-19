@@ -129,4 +129,5 @@ temp/
 # Uploads
 uploads/
 package-lock.json
-app\generated
+app/generated
+/app/generated/prisma
