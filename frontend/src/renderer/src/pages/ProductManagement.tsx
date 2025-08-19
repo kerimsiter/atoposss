@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import {
   Box,
   Typography,
@@ -15,14 +15,14 @@ import {
   Add as AddIcon, 
   Refresh as RefreshIcon,
   Inventory2Outlined as InventoryIcon,
-  TrendingUpOutlined as TrendingIcon,
   CategoryOutlined as CategoryIcon
 } from '@mui/icons-material';
 import { Product, useProductStore } from '../stores/useProductStore';
 import ProductList from '../components/product/ProductList';
-import ProductForm from '../components/product/ProductForm';
 import ModernCard from '../components/ui/ModernCard';
 import ModernButton from '../components/ui/ModernButton';
+
+const ProductForm = lazy(() => import('../components/product/ProductForm'));
 
 const ProductManagement: React.FC = () => {
   const { products, fetchProducts, loading, error, clearError } = useProductStore();
@@ -281,11 +281,24 @@ const ProductManagement: React.FC = () => {
             </ModernCard>
 
             {/* Product Form Dialog */}
-            <ProductForm
-              open={isFormOpen}
-              onClose={handleCloseForm}
-              product={selectedProduct}
-            />
+            <Suspense 
+              fallback={ 
+                <Backdrop
+                  sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+                  open={true}
+                >
+                  <CircularProgress color="inherit" />
+                </Backdrop>
+              }
+            >
+              {isFormOpen && (
+                <ProductForm
+                  open={isFormOpen}
+                  onClose={handleCloseForm}
+                  product={selectedProduct}
+                />
+              )}
+            </Suspense>
 
             {/* Loading Backdrop */}
             <Backdrop

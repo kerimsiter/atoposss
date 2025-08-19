@@ -37,7 +37,7 @@ interface ProductListProps {
   onEditProduct: (product: Product) => void;
 }
 
-const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
+function ProductList({ onEditProduct }: ProductListProps) {
   const { products, deleteProduct, loading } = useProductStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState('all');
@@ -52,7 +52,7 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
     }
   };
 
-  // Filter products based on search term and filter criteriaa
+  // Filter products based on search term and filter criteria
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -270,19 +270,20 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product, index) => (
-                <Fade in timeout={300 + index * 50} key={product.id}>
-                  <TableRow 
-                    hover 
-                    sx={{ 
-                      '&:hover': { 
-                        background: 'rgba(247, 249, 255, 0.5)',
-                        transform: 'scale(1.001)',
+              filteredProducts.map((product, index) => {
+                return (
+                  <Fade in={true} timeout={300 + index * 50} key={product.id}>
+                    <TableRow 
+                      hover 
+                      sx={{ 
+                        '&:hover': { 
+                          background: 'rgba(247, 249, 255, 0.5)',
+                          transform: 'scale(1.001)',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                        },
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                      },
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}
-                  >
+                      }}
+                    >
                     <TableCell sx={{ py: 2 }}>
                       <Typography variant="body2" sx={{ 
                         fontWeight: 600, 
@@ -404,15 +405,15 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
                         </Tooltip>
                       </Stack>
                     </TableCell>
-                  </TableRow>
-                </Fade>
-              ))
+                    </TableRow>
+                  </Fade>
+                );
+              })
             )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Box>
-  );
-};
-
-export default ProductList;
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
+    );
+  }
+export default React.memo(ProductList)
