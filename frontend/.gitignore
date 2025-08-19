@@ -50,3 +50,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /app/generated/prisma
 package-lock.json
+out\renderer\assets

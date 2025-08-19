@@ -51,3 +51,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 /app/generated/prisma
 frontend/package-lock.json
 backend/package-lock.json
+frontend/out/renderer/assets
