@@ -52,7 +52,7 @@ const ProductList: React.FC<ProductListProps> = ({ onEditProduct }) => {
     }
   };
 
-  // Filter products based on search term and filter criteria
+  // Filter products based on search term and filter criteriaa
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
