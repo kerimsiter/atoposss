@@ -1,32 +1,28 @@
 import React from 'react'
 import { Box, Stack, TextField, IconButton, Typography, Button, Divider } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
+import { useFieldArray, useFormContext, Controller } from 'react-hook-form'
 
 export interface VariantItem {
-  id: string
+  id?: string
   name: string
   sku?: string
-  price?: number
+  price: number
 }
 
 interface ProductVariantsSectionProps {
-  variants: VariantItem[]
-  onChange: (next: VariantItem[]) => void
-  errors?: Record<string, { name?: string; sku?: string; price?: string }>
+  variants?: VariantItem[]; // backward compatibility, unused with RHF
+  onChange?: (next: VariantItem[]) => void; // backward compatibility
+  errors?: Record<string, { name?: string; sku?: string; price?: string }>; // backward compatibility
 }
 
-const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variants, onChange, errors }) => {
+const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = () => {
+  const { control, formState } = useFormContext<any>()
+  const { errors } = formState as any
+  const { fields, append, remove } = useFieldArray({ control, name: 'variants' })
+
   const addVariant = () => {
-    const next = [...variants, { id: crypto.randomUUID(), name: '', sku: '', price: undefined }]
-    onChange(next)
-  }
-
-  const updateVariant = (id: string, patch: Partial<VariantItem>) => {
-    onChange(variants.map(v => (v.id === id ? { ...v, ...patch } : v)))
-  }
-
-  const removeVariant = (id: string) => {
-    onChange(variants.filter(v => v.id !== id))
+    append({ id: crypto.randomUUID(), name: '', sku: '', price: 0 })
   }
 
   return (
@@ -42,41 +38,58 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({ variant
       </Button>
 
       <Stack spacing={2}>
-        {variants.length === 0 && (
+        {fields.length === 0 && (
           <Typography variant="body2" color="text.secondary">Henüz varyant eklenmedi.</Typography>
         )}
-        {variants.map((v, idx) => (
-          <Box key={v.id} sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
+        {fields.map((field, idx) => (
+          <Box key={field.id} sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
-              <TextField
-                label={`Varyant Adı #${idx + 1}`}
-                value={v.name}
-                onChange={(e) => updateVariant(v.id, { name: e.target.value })}
-                fullWidth
-                placeholder="Örn: Büyük"
-                error={Boolean(errors?.[v.id]?.name)}
-                helperText={errors?.[v.id]?.name}
+              <Controller
+                name={`variants.${idx}.name`}
+                control={control}
+                render={({ field: f }) => (
+                  <TextField
+                    {...f}
+                    label={`Varyant Adı #${idx + 1}`}
+                    fullWidth
+                    placeholder="Örn: Büyük"
+                    error={Boolean(errors?.variants?.[idx]?.name)}
+                    helperText={errors?.variants?.[idx]?.name?.message as string}
+                  />
+                )}
               />
-              <TextField
-                label="SKU"
-                value={v.sku || ''}
-                onChange={(e) => updateVariant(v.id, { sku: e.target.value })}
-                sx={{ minWidth: 180 }}
-                placeholder="Örn: VAR-BYG"
-                error={Boolean(errors?.[v.id]?.sku)}
-                helperText={errors?.[v.id]?.sku}
+              <Controller
+                name={`variants.${idx}.sku`}
+                control={control}
+                render={({ field: f }) => (
+                  <TextField
+                    {...f}
+                    label="SKU"
+                    sx={{ minWidth: 180 }}
+                    placeholder="Örn: VAR-BYG"
+                    error={Boolean(errors?.variants?.[idx]?.sku)}
+                    helperText={errors?.variants?.[idx]?.sku?.message as string}
+                  />
+                )}
               />
-              <TextField
-                label="Fiyat"
-                type="number"
-                value={v.price ?? ''}
-                onChange={(e) => updateVariant(v.id, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
-                sx={{ minWidth: 160 }}
-                placeholder="Örn: 19.90"
-                error={Boolean(errors?.[v.id]?.price)}
-                helperText={errors?.[v.id]?.price}
+              <Controller
+                name={`variants.${idx}.price`}
+                control={control}
+                render={({ field: f }) => (
+                  <TextField
+                    {...f}
+                    label="Fiyat"
+                    type="number"
+                    sx={{ minWidth: 160 }}
+                    placeholder="Örn: 19.90"
+                    value={f.value ?? ''}
+                    onChange={(e) => f.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                    error={Boolean(errors?.variants?.[idx]?.price)}
+                    helperText={errors?.variants?.[idx]?.price?.message as string}
+                  />
+                )}
               />
-              <IconButton color="error" onClick={() => removeVariant(v.id)} aria-label="Varyantı sil">
+              <IconButton color="error" onClick={() => remove(idx)} aria-label="Varyantı sil">
                 <Delete />
               </IconButton>
             </Stack>

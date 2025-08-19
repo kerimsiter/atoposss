@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Box, Stack, TextField, IconButton, Typography, Button, Divider, Switch, FormControlLabel, Autocomplete } from '@mui/material'
 import { Add, Delete } from '@mui/icons-material'
 import { useMetaStore } from '../../stores/useMetaStore'
+import { useFieldArray, useFormContext } from 'react-hook-form'
 
 export interface ModifierItem {
   id: string
@@ -19,14 +20,17 @@ export interface ModifierGroup {
 }
 
 interface ProductModifiersSectionProps {
-  groups: ModifierGroup[]
-  onChange: (next: ModifierGroup[]) => void
-  errors?: Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>
+  groups?: ModifierGroup[]; // backward compatibility, unused with RHF
+  onChange?: (next: ModifierGroup[]) => void; // backward compatibility
+  errors?: Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>; // backward compatibility
 }
 
-const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ groups, onChange, errors }) => {
+const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = () => {
   const { modifierGroups, fetchModifierGroups } = useMetaStore()
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
+  const { control, setValue, formState } = useFormContext<any>()
+  const { errors } = formState as any
+  const { fields: groupFields, append: appendGroup, remove: removeGroupAt } = useFieldArray({ control, name: 'modifierGroups' })
 
   useEffect(() => {
     if (!modifierGroups || modifierGroups.length === 0) {
@@ -40,48 +44,14 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
   })) ?? [], [modifierGroups])
 
   const addGroup = () => {
-    const next: ModifierGroup[] = [
-      ...groups,
-      { id: crypto.randomUUID(), name: '', minSelect: 0, maxSelect: 1, items: [] }
-    ]
-    onChange(next)
-  }
-
-  const removeGroup = (id: string) => onChange(groups.filter(g => g.id !== id))
-
-  const patchGroup = (id: string, patch: Partial<ModifierGroup>) => {
-    onChange(groups.map(g => (g.id === id ? { ...g, ...patch } : g)))
-  }
-
-  const addItem = (groupId: string) => {
-    onChange(groups.map(g => (
-      g.id === groupId
-        ? { ...g, items: [...g.items, { id: crypto.randomUUID(), name: '', price: 0, affectsStock: false }] }
-        : g
-    )))
-  }
-
-  const patchItem = (groupId: string, itemId: string, patch: Partial<ModifierItem>) => {
-    onChange(groups.map(g => (
-      g.id === groupId
-        ? { ...g, items: g.items.map(i => (i.id === itemId ? { ...i, ...patch } : i)) }
-        : g
-    )))
-  }
-
-  const removeItem = (groupId: string, itemId: string) => {
-    onChange(groups.map(g => (
-      g.id === groupId
-        ? { ...g, items: g.items.filter(i => i.id !== itemId) }
-        : g
-    )))
+    appendGroup({ id: crypto.randomUUID(), name: '', minSelect: 0, maxSelect: 1, items: [] } as any)
   }
 
   const addExistingGroup = (groupId: string) => {
     const meta = modifierGroups.find(g => g.id === groupId)
     if (!meta) return
     // avoid duplicates by id
-    if (groups.some(g => g.id === meta.id)) return
+    if ((groupFields as any[]).some((g) => g.id === meta.id)) return
     const mapped: ModifierGroup = {
       id: meta.id,
       name: meta.name,
@@ -89,7 +59,7 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
       maxSelect: meta.maxSelection ?? 1 as any,
       items: (meta.modifiers ?? []).map(m => ({ id: m.id, name: m.name, price: Number(m.price ?? 0), affectsStock: false })),
     }
-    onChange([...groups, mapped])
+    appendGroup(mapped as any)
   }
 
   return (
@@ -124,84 +94,92 @@ const ProductModifiersSection: React.FC<ProductModifiersSectionProps> = ({ group
       </Stack>
 
       <Stack spacing={2}>
-        {groups.length === 0 && (
+        {groupFields.length === 0 && (
           <Typography variant="body2" color="text.secondary">Henüz grup eklenmedi.</Typography>
         )}
-        {groups.map((g, gi) => (
+        {groupFields.map((g, gi) => (
           <Box key={g.id} sx={{ p: 2, borderRadius: 2, border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(8px)' }}>
             <Stack spacing={2}>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
                 <TextField
                   label={`Grup Adı #${gi + 1}`}
-                  value={g.name}
-                  onChange={(e) => patchGroup(g.id, { name: e.target.value })}
+                  value={(g as any).name}
+                  onChange={(e) => setValue(`modifierGroups.${gi}.name`, e.target.value, { shouldValidate: true, shouldDirty: true })}
                   fullWidth
                   placeholder="Örn: İçecek Boyutu"
-                  error={Boolean(errors?.[g.id]?.name)}
-                  helperText={errors?.[g.id]?.name}
+                  error={Boolean(errors?.modifierGroups?.[gi]?.name)}
+                  helperText={errors?.modifierGroups?.[gi]?.name?.message as string}
                 />
                 <TextField
                   label="Min Seçim"
                   type="number"
-                  value={g.minSelect ?? 0}
-                  onChange={(e) => patchGroup(g.id, { minSelect: Number(e.target.value) })}
+                  value={(g as any).minSelect ?? 0}
+                  onChange={(e) => setValue(`modifierGroups.${gi}.minSelect`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 0"
-                  error={Boolean(errors?.[g.id]?.minSelect)}
-                  helperText={errors?.[g.id]?.minSelect}
+                  error={Boolean(errors?.modifierGroups?.[gi]?.minSelect)}
+                  helperText={errors?.modifierGroups?.[gi]?.minSelect?.message as string}
                 />
                 <TextField
                   label="Maks Seçim"
                   type="number"
-                  value={g.maxSelect ?? 1}
-                  onChange={(e) => patchGroup(g.id, { maxSelect: Number(e.target.value) })}
+                  value={(g as any).maxSelect ?? 1}
+                  onChange={(e) => setValue(`modifierGroups.${gi}.maxSelect`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                   sx={{ minWidth: 160 }}
                   placeholder="Örn: 1"
-                  error={Boolean(errors?.[g.id]?.maxSelect)}
-                  helperText={errors?.[g.id]?.maxSelect}
+                  error={Boolean(errors?.modifierGroups?.[gi]?.maxSelect)}
+                  helperText={errors?.modifierGroups?.[gi]?.maxSelect?.message as string}
                 />
-                <IconButton color="error" onClick={() => removeGroup(g.id)} aria-label="Grubu sil">
+                <IconButton color="error" onClick={() => removeGroupAt(gi)} aria-label="Grubu sil">
                   <Delete />
                 </IconButton>
               </Stack>
 
-              <Button variant="outlined" startIcon={<Add />} onClick={() => addItem(g.id)}>
+              <Button variant="outlined" startIcon={<Add />} onClick={() => {
+                const items = ((g as any).items ?? []) as any[]
+                const next = [...items, { id: crypto.randomUUID(), name: '', price: 0, affectsStock: false }]
+                setValue(`modifierGroups.${gi}.items`, next as any, { shouldValidate: true, shouldDirty: true })
+              }}>
                 Seçenek Ekle
               </Button>
 
               <Stack spacing={2}>
-                {g.items.map((i, ii) => (
+                {((g as any).items ?? []).map((i: any, ii: number) => (
                   <Box key={i.id} sx={{ p: 2, borderRadius: 2, border: '1px dashed rgba(0,0,0,0.1)', background: 'rgba(255,255,255,0.4)' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
                       <TextField
                         label={`Seçenek Adı #${ii + 1}`}
                         value={i.name}
-                        onChange={(e) => patchItem(g.id, i.id, { name: e.target.value })}
+                        onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.name`, e.target.value, { shouldValidate: true, shouldDirty: true })}
                         fullWidth
                         placeholder="Örn: Büyük"
-                        error={Boolean(errors?.[g.id]?.items?.[i.id]?.name)}
-                        helperText={errors?.[g.id]?.items?.[i.id]?.name}
+                        error={Boolean(errors?.modifierGroups?.[gi]?.items?.[ii]?.name)}
+                        helperText={errors?.modifierGroups?.[gi]?.items?.[ii]?.name?.message as string}
                       />
                       <TextField
                         label="Fiyat"
                         type="number"
                         value={i.price ?? 0}
-                        onChange={(e) => patchItem(g.id, i.id, { price: Number(e.target.value) })}
+                        onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.price`, Number(e.target.value), { shouldValidate: true, shouldDirty: true })}
                         sx={{ minWidth: 160 }}
                         placeholder="Örn: 5.00"
-                        error={Boolean(errors?.[g.id]?.items?.[i.id]?.price)}
-                        helperText={errors?.[g.id]?.items?.[i.id]?.price}
+                        error={Boolean(errors?.modifierGroups?.[gi]?.items?.[ii]?.price)}
+                        helperText={errors?.modifierGroups?.[gi]?.items?.[ii]?.price?.message as string}
                       />
                       <FormControlLabel
                         control={
                           <Switch
                             checked={Boolean(i.affectsStock)}
-                            onChange={(e) => patchItem(g.id, i.id, { affectsStock: e.target.checked })}
+                            onChange={(e) => setValue(`modifierGroups.${gi}.items.${ii}.affectsStock`, e.target.checked, { shouldValidate: false, shouldDirty: true })}
                           />
                         }
                         label="Stok Etkiler"
                       />
-                      <IconButton color="error" onClick={() => removeItem(g.id, i.id)} aria-label="Seçeneği sil">
+                      <IconButton color="error" onClick={() => {
+                        const items = ((g as any).items ?? []) as any[]
+                        const next = items.filter((_, index) => index !== ii)
+                        setValue(`modifierGroups.${gi}.items`, next as any, { shouldValidate: true, shouldDirty: true })
+                      }} aria-label="Seçeneği sil">
                         <Delete />
                       </IconButton>
                     </Stack>

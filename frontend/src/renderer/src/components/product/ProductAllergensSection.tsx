@@ -1,11 +1,9 @@
 import React from 'react'
 import { Box, Stack, Typography, Autocomplete, TextField, Chip } from '@mui/material'
+import { useFormContext } from 'react-hook-form'
 
 export interface ProductAllergensSectionProps {
-  value: string[]
-  onChange: (next: string[]) => void
   disabled?: boolean
-  error?: string
 }
 
 // Common allergen suggestions
@@ -25,7 +23,10 @@ const ALLERGEN_OPTIONS: string[] = [
   'Sülfit',
 ]
 
-const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ value, onChange, disabled, error }) => {
+const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ disabled }) => {
+  const { watch, setValue, formState } = useFormContext<any>()
+  const value: string[] = watch('allergens') ?? []
+  const error = (formState as any)?.errors?.allergens?.message as string | undefined
   return (
     <Box>
       <Stack spacing={1} sx={{ mb: 1 }}>
@@ -52,7 +53,7 @@ const ProductAllergensSection: React.FC<ProductAllergensSectionProps> = ({ value
               seen.add(key);
               return Boolean(v);
             });
-          onChange(unique);
+          setValue('allergens', unique, { shouldValidate: true, shouldDirty: true });
         }}
         renderTags={(tagValue, getTagProps) =>
           tagValue.map((option, index) => {

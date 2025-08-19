@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -22,13 +22,18 @@ import ProductFormTabs, { ProductFormTabKey } from './ProductFormTabs';
 import ProductVariantsSection, { VariantItem } from './ProductVariantsSection';
 import ProductModifiersSection, { ModifierGroup } from './ProductModifiersSection';
 import ProductAllergensSection from './ProductAllergensSection';
-import { productFullSchema, variantSchema, modifierGroupSchema } from '../../validation/productSchemas';
+import { productFullSchema, variantSchema, modifierGroupSchema, ProductFormInput } from '../../validation/productSchemas';
+import { z } from 'zod';
+import { useForm, FormProvider } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 interface ProductFormProps {
   open: boolean;
   onClose: () => void;
   product?: Product | null;
 }
+
+type FormValues = Omit<ProductFormInput, 'allergens'> & { allergens: string[] | undefined };
 
 const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => {
   const { addProduct, updateProduct, loading, error, clearError, products, fetchProducts } = useProductStore();
@@ -38,27 +43,67 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
   // Tabs & advanced sections local state (UI only for now)
   const [activeTab, setActiveTab] = useState<ProductFormTabKey>('general');
-  const [variants, setVariants] = useState<VariantItem[]>([]);
-  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
-  const [allergens, setAllergens] = useState<string[]>([]);
+  // Variants & modifierGroups & allergens now RHF-managed via RHF
 
-  const [formData, setFormData] = useState<CreateProductData>({
-    name: '',
-    code: '',
-    barcode: '',
-    description: '',
-    basePrice: 0,
-    categoryId: '',
-    taxId: '',
-    trackStock: false,
-    unit: 'PIECE',
-    image: undefined
+  // Build resolver schema with duplicate code check (superRefine)
+  const resolverSchema = useMemo(() =>
+    productFullSchema.superRefine((data, ctx) => {
+      const codeTrim = (data.code ?? '').trim();
+      if (!codeTrim) return;
+      const exists = products.some(p =>
+        p.code.trim().toLowerCase() === codeTrim.toLowerCase() && (!product || p.id !== product.id)
+      );
+      if (exists) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Bu ürün kodu zaten kullanılıyor' });
+      }
+      // Variant SKU uniqueness (ignore empty)
+      const skus = new Map<string, number[]>();
+      (data.variants ?? []).forEach((v, i) => {
+        const s = (v?.sku ?? '').trim().toLowerCase();
+        if (!s) return;
+        const arr = skus.get(s) ?? [];
+        arr.push(i);
+        skus.set(s, arr);
+      });
+      for (const [_, idxs] of skus) {
+        if (idxs.length > 1) {
+          idxs.forEach(i => {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['variants', i, 'sku'], message: 'SKU benzersiz olmalı' });
+          });
+        }
+      }
+    })
+  , [products, product]);
+
+  // react-hook-form for base fields
+  const formMethods = useForm<FormValues>({
+    resolver: zodResolver(resolverSchema),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      code: '',
+      barcode: '',
+      description: '',
+      basePrice: 0,
+      categoryId: '',
+      taxId: '',
+      trackStock: false,
+      unit: 'PIECE',
+      image: undefined,
+      variants: [],
+      modifierGroups: [],
+      allergens: [],
+    },
   });
-
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [variantErrors, setVariantErrors] = useState<Record<string, { name?: string; sku?: string; price?: string }>>({});
-  const [modifierErrors, setModifierErrors] = useState<Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>>({});
-  const [allergensError, setAllergensError] = useState<string | undefined>(undefined);
+  const { watch, setValue, reset, trigger, formState, setError } = formMethods;
+  const baseValues = watch();
+  const rhfVariants = watch('variants') as VariantItem[] | undefined;
+  const rhfModifierGroups = watch('modifierGroups') as ModifierGroup[] | undefined;
+  const rhfAllergens = watch('allergens') as string[] | undefined;
+  const formErrors: Record<string, string> = Object.fromEntries(
+    Object.entries(formState.errors).map(([k, v]: any) => [k, v?.message || ''])
+  );
+  const [, setModifierErrors] = useState<Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }>>({});
 
   // Fetch meta data when dialog opens
   useEffect(() => {
@@ -78,7 +123,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         const validCategoryId = categories.some(cat => cat.id === product.categoryId) ? product.categoryId : '';
         const validTaxId = taxes.some(tax => tax.id === product.taxId) ? product.taxId : '';
 
-        setFormData({
+        reset({
           name: product.name,
           code: product.code,
           barcode: product.barcode || '',
@@ -87,23 +132,21 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           categoryId: validCategoryId,
           taxId: validTaxId,
           trackStock: product.trackStock,
-          unit: product.unit,
-          image: product.image
+          unit: product.unit as any,
+          image: product.image,
         });
         // Hydrate tabs data from backend relations if available
         try {
           const srvVariants = (product as any).variants as any[] | undefined;
           if (Array.isArray(srvVariants) && srvVariants.length) {
-            setVariants(
-              srvVariants.map(v => ({
-                id: v.id,
-                name: v.name ?? '',
-                sku: v.sku ?? '',
-                price: v.price !== undefined && v.price !== null ? Number(v.price) : undefined,
-              }))
-            );
+            setValue('variants', srvVariants.map(v => ({
+              id: v.id,
+              name: v.name ?? '',
+              sku: v.sku ?? '',
+              price: v.price !== undefined && v.price !== null ? Number(v.price) : 0,
+            })) as any, { shouldValidate: true, shouldDirty: false });
           } else {
-            setVariants([]);
+            setValue('variants', [], { shouldValidate: false, shouldDirty: false });
           }
 
           const srvPmgs = (product as any).modifierGroups as any[] | undefined;
@@ -125,22 +168,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                     }))
                   : [],
               }));
-            setModifierGroups(groups);
+            setValue('modifierGroups', groups as any, { shouldValidate: true, shouldDirty: false });
           } else {
-            setModifierGroups([]);
+            setValue('modifierGroups', [], { shouldValidate: false, shouldDirty: false });
           }
           // Allergens hydrate
           const srvAllergens = (product as any).allergens as string[] | undefined;
-          setAllergens(Array.isArray(srvAllergens) ? srvAllergens : []);
+          setValue('allergens', Array.isArray(srvAllergens) ? srvAllergens : [], { shouldValidate: true, shouldDirty: false });
         } catch (e) {
           console.warn('Product hydrate warning:', e);
-          setVariants([]);
-          setModifierGroups([]);
-          setAllergens([]);
+          setValue('variants', [], { shouldValidate: false, shouldDirty: false });
+          setValue('modifierGroups', [], { shouldValidate: false, shouldDirty: false });
+          setValue('allergens', [], { shouldValidate: false, shouldDirty: false });
         }
       } else {
         // Add mode - reset form
-        setFormData({
+        reset({
           name: '',
           code: '',
           barcode: '',
@@ -150,13 +193,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           taxId: '',
           trackStock: false,
           unit: 'PIECE',
-          image: undefined
+          image: undefined,
         });
-        setVariants([]);
-        setModifierGroups([]);
-        setAllergens([]);
+        setValue('variants', [], { shouldValidate: false, shouldDirty: false });
+        setValue('modifierGroups', [], { shouldValidate: false, shouldDirty: false });
+        setValue('allergens', [], { shouldValidate: false, shouldDirty: false });
       }
-      setFormErrors({});
+      // RHF handles base errors; advanced errors handled separately
       clearError();
       setActiveTab('general');
     }
@@ -166,35 +209,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: unknown } }
   ) => {
     const value = event.target.value;
-    setFormData(prev => ({
-      ...prev,
-      [field]: field === 'basePrice' ? Number(value) : value
-    }));
-
-    if (formErrors[field]) {
-      setFormErrors(prev => ({ ...prev, [field]: '' }));
-    }
+    setValue(field as any, field === 'basePrice' ? Number(value) : value, { shouldValidate: true, shouldDirty: true });
   };
 
   // ------ Advanced validation helpers (Zod) ------
-  const validateVariants = (list: VariantItem[]) => {
-    const nextErr: Record<string, { name?: string; sku?: string; price?: string }> = {};
-    list.forEach(v => {
-      const parsed = variantSchema.safeParse({ ...v, price: v.price });
-      if (!parsed.success) {
-        parsed.error.issues.forEach(iss => {
-          const key = iss.path[0] as 'name' | 'sku' | 'price';
-          nextErr[v.id] = { ...nextErr[v.id], [key]: iss.message };
-        });
-      }
-    });
-    setVariantErrors(nextErr);
-    return nextErr;
-  };
 
   const validateModifierGroups = (groups: ModifierGroup[]) => {
     const nextErr: Record<string, { name?: string; minSelect?: string; maxSelect?: string; items?: Record<string, { name?: string; price?: string }> }> = {};
-    groups.forEach(g => {
+    groups.forEach((g, gIdx) => {
       const parsed = modifierGroupSchema.safeParse({
         ...g,
         items: g.items?.map(i => ({ ...i, price: i.price })) ?? [],
@@ -207,10 +229,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
             const item = g.items[idx];
             if (item) {
               const field = (iss.path[2] as 'name' | 'price') ?? 'name';
-              nextErr[g.id] = { ...nextErr[g.id], items: { ...(nextErr[g.id]?.items ?? {}), [item.id]: { ...(nextErr[g.id]?.items?.[item.id] ?? {}), [field]: iss.message } } };
+              const gid = g.id ?? String(gIdx);
+              const iid = item.id ?? String(idx);
+              nextErr[gid] = { ...nextErr[gid], items: { ...(nextErr[gid]?.items ?? {}), [iid]: { ...(nextErr[gid]?.items?.[iid] ?? {}), [field]: iss.message } } };
             }
-          } else if (path0 === 'name' || path0 === 'minSelect' || path0 === 'maxSelect') {
-            nextErr[g.id] = { ...nextErr[g.id], [path0]: iss.message } as any;
+          } else if (path0 === 'minSelect' || path0 === 'maxSelect' || path0 === 'name') {
+            const gid = g.id ?? String(gIdx);
+            nextErr[gid] = { ...nextErr[gid], [path0]: iss.message } as any;
           }
         });
       }
@@ -219,97 +244,59 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     return nextErr;
   };
 
-  const validateAllergens = (list: string[]) => {
-    // productFullSchema includes allergens; validate a minimal object
-    const parsed = productFullSchema.pick({ allergens: true }).safeParse({ allergens: list });
-    setAllergensError(parsed.success ? undefined : parsed.error.issues[0]?.message);
-    return parsed.success;
-  };
+  // Allergens are validated by Zod in the final parse; instant UI errors are surfaced from RHF resolver if present
 
   const handleSwitchChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: event.target.checked
-    }));
+    setValue(field as any, event.target.checked as any, { shouldValidate: true, shouldDirty: true });
   };
 
   const handleImageChange = (image: string | undefined) => {
-    setFormData(prev => ({ ...prev, image }));
+    setValue('image', image as any, { shouldValidate: false, shouldDirty: true });
   };
 
   // Instant validation effects for advanced sections
   useEffect(() => {
     if (!open) return;
-    validateVariants(variants);
-  }, [open, variants]);
+    validateModifierGroups(rhfModifierGroups ?? []);
+  }, [open, rhfModifierGroups]);
 
-  useEffect(() => {
-    if (!open) return;
-    validateModifierGroups(modifierGroups);
-  }, [open, modifierGroups]);
-
-  useEffect(() => {
-    if (!open) return;
-    validateAllergens(allergens);
-  }, [open, allergens]);
+  // No separate effect for allergens; RHF handles onChange validation
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     // Reset advanced error maps
-    setVariantErrors({});
     setModifierErrors({});
-    setAllergensError(undefined);
+    // allergens errors are handled by RHF
 
-    if (!formData.name.trim()) {
-      errors.name = 'Ürün adı gereklidir';
-    }
-    const codeTrim = formData.code.trim();
-    if (!codeTrim) {
-      errors.code = 'Ürün kodu gereklidir';
-    }
-    // Duplicate code check (frontend) — assumes single-company context
-    if (codeTrim) {
-      const exists = products.some(p =>
-        p.code.trim().toLowerCase() === codeTrim.toLowerCase() && (!product || p.id !== product.id)
-      );
-      if (exists) {
-        errors.code = 'Bu ürün kodu zaten kullanılıyor';
-      }
-    }
-    if (formData.basePrice <= 0) {
-      errors.basePrice = 'Fiyat 0\'dan büyük olmalıdır';
-    }
-    if (!formData.categoryId) {
-      errors.categoryId = 'Kategori seçimi gereklidir';
-    }
-    if (!formData.taxId) {
-      errors.taxId = 'Vergi oranı seçimi gereklidir';
-    }
+    // Duplicate code is handled by resolver (Zod superRefine)
 
     // Advanced: Zod validation for arrays
-    const vErr = validateVariants(variants);
-    const mErr = validateModifierGroups(modifierGroups);
-    validateAllergens(allergens);
-    if (Object.keys(vErr).length || Object.keys(mErr).length || allergensError) {
+    const mErr = validateModifierGroups(rhfModifierGroups ?? []);
+    if (Object.keys(mErr).length) {
       // Keep a generic advanced flag to show an Alert if needed
       errors.advanced = 'Gelişmiş alanlarda hatalar var. Lütfen ilgili sekmeleri kontrol edin.';
     }
 
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+    // RHF base field errors are in formState.errors; merge only duplicate code error here for UI alert usage
+    if (Object.keys(errors).length) {
+      // show a generic advanced message and code duplication if any
+    }
+    return Object.keys(errors).length === 0 && Object.keys(formState.errors).length === 0;
   };
 
   const handleSubmit = async () => {
-    if (!validateForm()) {
+    // First validate base fields via RHF
+    const rhfOk = await trigger();
+    if (!rhfOk || !validateForm()) {
       return;
     }
 
     try {
       // Map UI state to backend DTO
       // CreateProductDto does NOT allow `id` on variants; UpdateProductDto does.
-      const mappedVariants = variants
+      const mappedVariants = (rhfVariants ?? [])
         .map(v => (
           product
             ? { id: v.id, name: v.name.trim(), sku: v.sku?.trim() || undefined, price: v.price }
@@ -317,7 +304,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         ))
         .filter(v => v.name && typeof v.price === 'number' && !Number.isNaN(v.price));
 
-      const mappedModifierGroups = modifierGroups
+      const mappedModifierGroups = (rhfModifierGroups ?? [])
         .map(g => ({
           id: g.id,
           name: g.name.trim(),
@@ -330,8 +317,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         .filter(g => g.name && g.items.length > 0);
 
       const payload: CreateProductData = {
-        ...formData,
-        allergens: allergens.length ? allergens : undefined,
+        ...baseValues,
+        allergens: (rhfAllergens?.length ? rhfAllergens : undefined) as any,
         variants: mappedVariants.length ? mappedVariants : undefined,
         modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
       };
@@ -343,13 +330,10 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         basePrice: Number(payload.basePrice),
       });
       if (!parsed.success) {
-        // Map base errors into formErrors
-        const nextErr: Record<string, string> = {};
         parsed.error.issues.forEach(iss => {
-          const k = iss.path[0] as string;
-          if (k) nextErr[k] = iss.message;
+          const k = iss.path[0] as keyof typeof baseValues;
+          if (k) setError(k as any, { type: 'zod', message: iss.message });
         });
-        setFormErrors(prev => ({ ...prev, ...nextErr }));
         return;
       }
 
@@ -398,6 +382,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       <DialogContent sx={{ p: 4 }}>
         <Fade in={open} timeout={300}>
           <Box>
+          <FormProvider {...formMethods}>
             {error && (
               <Alert
                 severity="error"
@@ -428,7 +413,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                       </Typography>
                     </Stack>
                     <ModernImageUpload
-                      value={formData.image}
+                      value={baseValues.image}
                       onChange={handleImageChange}
                       disabled={loading}
                     />
@@ -436,7 +421,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
                   <Box sx={{ mb: 3 }}>
                     <ProductFormBasicInfo
-                      formData={formData}
+                      formData={baseValues as any}
                       handleInputChange={handleInputChange}
                       formErrors={formErrors}
                     />
@@ -444,7 +429,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
                   <Box sx={{ mb: 3 }}>
                     <ProductFormPricing
-                      formData={formData}
+                      formData={baseValues as any}
                       handleInputChange={handleInputChange}
                       formErrors={formErrors}
                       unitOptions={unitOptions}
@@ -453,7 +438,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
                   <Box sx={{ mb: 3 }}>
                     <ProductFormCategories
-                      formData={formData}
+                      formData={baseValues as any}
                       handleInputChange={handleInputChange}
                       formErrors={formErrors}
                       categories={categories}
@@ -464,7 +449,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
                   <Box>
                     <ProductFormStock
-                      trackStock={formData.trackStock}
+                      trackStock={baseValues.trackStock}
                       handleSwitchChange={handleSwitchChange}
                     />
                   </Box>
@@ -472,17 +457,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
               )}
 
               {activeTab === 'variants' && (
-                <ProductVariantsSection variants={variants} onChange={setVariants} errors={variantErrors} />
+                <ProductVariantsSection />
               )}
 
               {activeTab === 'modifiers' && (
-                <ProductModifiersSection groups={modifierGroups} onChange={setModifierGroups} errors={modifierErrors} />
+                <ProductModifiersSection />
               )}
 
               {activeTab === 'allergens' && (
-                <ProductAllergensSection value={allergens} onChange={setAllergens} disabled={loading} error={allergensError} />
+                <ProductAllergensSection disabled={loading} />
               )}
             </Stack>
+          </FormProvider>
           </Box>
         </Fade>
       </DialogContent>
