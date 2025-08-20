@@ -423,17 +423,27 @@ export class ProductsService {
           let groupId = g.id as string | undefined;
 
           if (groupId) {
-            // update group fields
-            await tx.modifierGroup.update({
+            // upsert group by id to avoid P2025
+            const up = await tx.modifierGroup.upsert({
               where: { id: groupId },
-              data: {
+              update: {
                 name: g.name,
                 minSelection: g.minSelect ?? 0,
                 maxSelection: g.maxSelect ?? 1,
                 required: (g.minSelect ?? 0) > 0,
                 active: true,
-              }
+              },
+              create: {
+                id: groupId,
+                name: g.name,
+                minSelection: g.minSelect ?? 0,
+                maxSelection: g.maxSelect ?? 1,
+                required: (g.minSelect ?? 0) > 0,
+                freeSelection: 0,
+                active: true,
+              },
             });
+            groupId = up.id;
           } else {
             const createdGroup = await tx.modifierGroup.create({
               data: {
@@ -455,16 +465,25 @@ export class ProductsService {
             for (let ii = 0; ii < g.items.length; ii++) {
               const i = g.items[ii];
               if (i.id) {
-                await tx.modifier.update({
+                const up = await tx.modifier.upsert({
                   where: { id: i.id },
-                  data: {
+                  update: {
                     name: i.name,
                     price: new Prisma.Decimal(i.price ?? 0),
                     displayOrder: ii,
                     active: true,
                   },
+                  create: {
+                    id: i.id,
+                    groupId,
+                    name: i.name,
+                    price: new Prisma.Decimal(i.price ?? 0),
+                    maxQuantity: 1,
+                    displayOrder: ii,
+                    active: true,
+                  },
                 });
-                modKeep.add(i.id);
+                modKeep.add(up.id);
               } else {
                 const createdMod = await tx.modifier.create({
                   data: {

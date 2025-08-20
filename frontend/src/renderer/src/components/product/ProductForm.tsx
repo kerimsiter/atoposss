@@ -156,8 +156,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           barcode: product.barcode || '',
           description: product.description || '',
           basePrice: Number(product.basePrice),
-          categoryId: product.categoryId || '',
-          taxId: product.taxId || '',
+          // Kategori/vergiler henüz yüklenmemiş olabilir; şimdilik boş ver, sonra seçenekler gelince set et
+          categoryId: '',
+          taxId: '',
           trackStock: product.trackStock,
           unit: product.unit as any,
           image: product.image,
@@ -233,7 +234,36 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       setSubmitNotice(null);
       setActiveTab('general');
     }
-  }, [open, product, categories, taxes, clearError]);
+  }, [open, product?.id, clearError]);
+
+  // Meta listeler geldikten sonra, ürünün kategori/vergi değerlerini geçerli seçeneklerden biri ise ata
+  useEffect(() => {
+    if (!open) return;
+    if (!categories?.length) return;
+    if (isEditMode) {
+      // Edit modu: sadece geçerliyse set et; değilse boş bırak ve hata göster
+      if (product?.categoryId && categories.some(c => String(c.id) === String(product.categoryId))) {
+        setValue('categoryId', String(product.categoryId) as any, { shouldValidate: true, shouldDirty: false });
+      } else {
+        setValue('categoryId', '' as any, { shouldValidate: true, shouldDirty: false });
+        setError('categoryId' as any, { type: 'manual', message: 'Kategori seçimi gereklidir' });
+      }
+    } else {
+      // Add modu: ilk kategoriyi otomatik ata
+      const first = categories[0]?.id;
+      if (first !== undefined && first !== null) {
+        setValue('categoryId', String(first) as any, { shouldValidate: true, shouldDirty: false });
+      }
+    }
+  }, [open, isEditMode, product?.categoryId, categories, setValue, setError]);
+
+  useEffect(() => {
+    if (!open || !product) return;
+    if (taxes?.length && product.taxId) {
+      const exists = taxes.some(t => String(t.id) === String(product.taxId));
+      if (exists) setValue('taxId', String(product.taxId) as any, { shouldValidate: true, shouldDirty: false });
+    }
+  }, [open, product, taxes, setValue]);
 
   const handleInputChange = (field: string) => (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | { target: { value: unknown } }
