@@ -18,7 +18,7 @@ import {
   GridRenderCellParams,
   GridSortModel,
   GridPaginationModel,
-  GridToolbar
+  GridToolbar,
 } from '@mui/x-data-grid';
 import { 
   Edit as EditIcon, 
@@ -46,16 +46,35 @@ function ProductList({ onEditProduct }: ProductListProps) {
   const [sortModel, setSortModel] = useState<GridSortModel>([
     { field: 'createdAt', sort: 'desc' }
   ]);
-  const [columnVisibilityModel, setColumnVisibilityModel] = useState<Record<string, boolean>>({
-    createdAt: true,
-    code: true,
-    name: true,
-    barcode: true,
-    basePrice: true,
-    unit: true,
-    active: true,
-    trackStock: true,
-    actions: true,
+  const STORAGE_KEYS = {
+    visibility: 'productList.columnVisibility',
+    widths: 'productList.columnWidths',
+  } as const;
+
+  const [columnVisibilityModel, setColumnVisibilityModel] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.visibility);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      createdAt: true,
+      code: true,
+      name: true,
+      barcode: true,
+      basePrice: true,
+      unit: true,
+      active: true,
+      trackStock: true,
+      actions: true,
+    } as Record<string, boolean>;
+  });
+
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.widths);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {} as Record<string, number>;
   });
 
   // Map UI filter to API params
@@ -66,6 +85,16 @@ function ProductList({ onEditProduct }: ProductListProps) {
       trackStock: filterBy === 'trackStock' ? true : undefined,
     } as { active?: boolean; trackStock?: boolean };
   }, [filterBy]);
+
+  // Persist visibility
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.visibility, JSON.stringify(columnVisibilityModel)); } catch {}
+  }, [columnVisibilityModel]);
+
+  // Persist widths
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEYS.widths, JSON.stringify(columnWidths)); } catch {}
+  }, [columnWidths]);
 
   // date time formatter
   const formatDateTime = useCallback((iso?: string) => {
@@ -158,6 +187,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       headerName: 'Oluşturulma',
       sortable: true,
       minWidth: 160,
+      width: columnWidths['createdAt'] ?? 160,
       flex: 0.8,
       renderCell: (params: GridRenderCellParams<Product>) => (
         <Typography variant="body2" color="text.secondary">
@@ -169,6 +199,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'code',
       headerName: 'Ürün Kodu',
       minWidth: 140,
+      width: columnWidths['code'] ?? 140,
       flex: 0.6,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2" sx={{ 
@@ -185,6 +216,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'name',
       headerName: 'Ürün Bilgileri',
       minWidth: 260,
+      width: columnWidths['name'] ?? 260,
       flex: 1.4,
       sortable: true,
       renderCell: (params: GridRenderCellParams<Product>) => {
@@ -243,6 +275,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'barcode',
       headerName: 'Barkod',
       minWidth: 160,
+      width: columnWidths['barcode'] ?? 160,
       flex: 0.8,
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2" sx={{ 
@@ -259,6 +292,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       headerName: 'Fiyat',
       type: 'number',
       minWidth: 140,
+      width: columnWidths['basePrice'] ?? 140,
       flex: 0.8,
       align: 'right',
       headerAlign: 'right',
@@ -281,6 +315,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'unit',
       headerName: 'Birim',
       minWidth: 120,
+      width: columnWidths['unit'] ?? 120,
       flex: 0.6,
       align: 'center',
       headerAlign: 'center',
@@ -298,6 +333,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'active',
       headerName: 'Durum',
       minWidth: 140,
+      width: columnWidths['active'] ?? 140,
       flex: 0.7,
       align: 'center',
       headerAlign: 'center',
@@ -316,6 +352,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       field: 'trackStock',
       headerName: 'Stok Takibi',
       minWidth: 160,
+      width: columnWidths['trackStock'] ?? 160,
       flex: 0.8,
       align: 'center',
       headerAlign: 'center',
@@ -337,6 +374,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       sortable: false,
       filterable: false,
       minWidth: 160,
+      width: columnWidths['actions'] ?? 160,
       flex: 0.8,
       align: 'center',
       headerAlign: 'center',
@@ -400,18 +438,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
     );
   }, [filterBy, searchTerm]);
 
-  const ErrorOverlay = useMemo(() => function Err() {
-    return (
-      <Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
-        <Typography variant="h6" color="error" sx={{ fontWeight: 600 }}>
-          Bir hata oluştu
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {String(error ?? 'Veriler yüklenirken bir sorun oluştu.')}
-        </Typography>
-      </Stack>
-    );
-  }, [error]);
+  // Basit hata mesajını üstte ayrı gösterebiliriz veya boş overlay'i kullanırız (slot errorOverlay community sürümde yok)
 
   return (
     <Box>
@@ -534,13 +561,17 @@ function ProductList({ onEditProduct }: ProductListProps) {
           getRowId={(row) => row.id}
           rowCount={pagination.total}
           loading={loading}
-          error={error || undefined}
           paginationMode="server"
           sortingMode="server"
           paginationModel={paginationModel}
           onPaginationModelChange={handlePaginationModelChange}
           sortModel={sortModel}
           onSortModelChange={handleSortModelChange}
+          onColumnWidthChange={(params: any) => {
+            const { colDef, width } = params || {};
+            if (!colDef?.field || typeof width !== 'number') return;
+            setColumnWidths(prev => ({ ...prev, [colDef.field]: width }));
+          }}
           disableRowSelectionOnClick
           disableColumnMenu={false}
           checkboxSelection={false}
@@ -553,7 +584,6 @@ function ProductList({ onEditProduct }: ProductListProps) {
           slots={{
             toolbar: GridToolbar,
             noRowsOverlay: NoRowsOverlay,
-            errorOverlay: ErrorOverlay,
           }}
           slotProps={{
             toolbar: {
