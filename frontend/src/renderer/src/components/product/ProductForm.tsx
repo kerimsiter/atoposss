@@ -92,6 +92,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       trackStock: false,
       unit: 'PIECE',
       image: undefined,
+      images: [],
       variants: [],
       modifierGroups: [],
       allergens: [],
@@ -136,6 +137,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           trackStock: product.trackStock,
           unit: product.unit as any,
           image: product.image,
+          images: Array.isArray((product as any).images) ? (product as any).images : [],
         });
         // Hydrate tabs data from backend relations if available
         try {
@@ -196,6 +198,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           trackStock: false,
           unit: 'PIECE',
           image: undefined,
+          images: [],
         });
         setValue('variants', [], { shouldValidate: false, shouldDirty: false });
         setValue('modifierGroups', [], { shouldValidate: false, shouldDirty: false });
@@ -254,8 +257,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     setValue(field as any, event.target.checked as any, { shouldValidate: true, shouldDirty: true });
   };
 
-  const handleImageChange = (image: string | undefined) => {
-    setValue('image', image as any, { shouldValidate: false, shouldDirty: true });
+  const handleImagesChange = (urls: string[]) => {
+    setValue('images', urls as any, { shouldValidate: true, shouldDirty: true });
+    const currentPrimary = (watch('image') as any) as string | undefined;
+    if (!currentPrimary && urls.length > 0) {
+      setValue('image', urls[0] as any, { shouldValidate: true, shouldDirty: true });
+    } else if (currentPrimary && !urls.includes(currentPrimary)) {
+      // primary silindiyse, ilk elemana düş
+      setValue('image', (urls[0] as any) ?? undefined, { shouldValidate: true, shouldDirty: true });
+    }
+  };
+
+  const handlePrimaryImageChange = (url: string | undefined) => {
+    setValue('image', url as any, { shouldValidate: true, shouldDirty: true });
   };
 
   // Instant validation effects for advanced sections
@@ -320,6 +334,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
       const payload: CreateProductData = {
         ...baseValues,
+        image: baseValues.image || (baseValues.images?.[0] ?? undefined),
+        images: (baseValues.images && baseValues.images.length ? baseValues.images : undefined) as any,
         allergens: (rhfAllergens?.length ? rhfAllergens : undefined) as any,
         variants: mappedVariants.length ? mappedVariants : undefined,
         modifierGroups: mappedModifierGroups.length ? mappedModifierGroups : undefined,
@@ -411,12 +427,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
                       <ImageIcon color="primary" />
                       <Typography variant="h6" sx={{ fontWeight: 600, color: '#1B1B1B' }}>
-                        Ürün Resmi
+                        Ürün Görselleri
                       </Typography>
                     </Stack>
                     <ModernImageUpload
-                      value={baseValues.image}
-                      onChange={handleImageChange}
+                      currentImages={baseValues.images || []}
+                      onChange={handleImagesChange}
+                      primaryImageUrl={baseValues.image}
+                      onPrimaryImageChange={handlePrimaryImageChange}
                       disabled={loading}
                     />
                   </Box>

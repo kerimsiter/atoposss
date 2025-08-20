@@ -345,20 +345,41 @@ function ProductList({ onEditProduct }: ProductListProps) {
                     </TableCell>
                     <TableCell sx={{ py: 2 }}>
                       <Stack direction="row" spacing={2} alignItems="center">
-                        <Avatar
-                          src={product.image || undefined}
-                          sx={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 2,
-                            background: product.image 
-                              ? 'transparent' 
-                              : 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
-                            border: '1.5px solid rgba(246, 246, 246, 1)',
-                          }}
-                        >
-                          {!product.image && <InventoryIcon color="primary" />}
-                        </Avatar>
+                        <Box sx={{ position: 'relative' }}>
+                          <Avatar
+                            src={(product.image || (product as any).images?.[0] || undefined) as any}
+                            sx={{
+                              width: 48,
+                              height: 48,
+                              borderRadius: 2,
+                              background: (product.image || (product as any).images?.[0])
+                                ? 'transparent' 
+                                : 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
+                              border: '1.5px solid rgba(246, 246, 246, 1)',
+                            }}
+                          >
+                            {!(product.image || (product as any).images?.[0]) && <InventoryIcon color="primary" />}
+                          </Avatar>
+                          {Array.isArray((product as any).images) && (product as any).images.length > 1 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                bottom: -4,
+                                right: -4,
+                                background: 'rgba(45, 104, 255, 0.9)',
+                                color: 'white',
+                                borderRadius: '10px',
+                                px: 0.75,
+                                py: 0.25,
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                              }}
+                            >
+                              {(product as any).images.length}
+                            </Box>
+                          )}
+                        </Box>
                         <Stack spacing={0.5}>
                           <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
                             {product.name}

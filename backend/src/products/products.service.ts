@@ -53,7 +53,7 @@ export class ProductsService {
       displayOrder: createProductDto.displayOrder ?? 0,
       active: createProductDto.active ?? true,
       image: createProductDto.image,
-      images: [],
+      images: createProductDto.images ?? [],
       allergens: createProductDto.allergens ?? [],
       hasVariants: Boolean(createProductDto.variants?.length),
       hasModifiers: Boolean(createProductDto.modifierGroups?.length),
@@ -198,6 +198,7 @@ export class ProductsService {
           active: true,
           trackStock: true,
           image: true,
+          images: true,
           createdAt: true,
         },
         orderBy: { [sortBy]: order },
@@ -306,6 +307,9 @@ export class ProductsService {
     }
     if (updateProductDto.image !== undefined) {
       data.image = updateProductDto.image;
+    }
+    if (updateProductDto.images !== undefined) {
+      (data as Prisma.ProductUpdateInput).images = updateProductDto.images;
     }
 
     // Update flags if variant/modifier arrays explicitly provided

@@ -88,6 +88,11 @@ export class CreateProductDto {
   @IsString()
   image?: string;
 
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
   // Optional: Variants and Modifiers
   @IsOptional()
   @IsArray()

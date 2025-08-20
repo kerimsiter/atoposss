@@ -100,6 +100,7 @@ export interface CreateProductData {
   unit: string;
   companyId?: string; // Optional, will be set automatically
   image?: string; // Product image URL
+  images?: string[]; // Additional product images URLs
   // Optional advanced data, will be sent once backend supports it
   allergens?: string[];
   variants?: ProductVariant[];

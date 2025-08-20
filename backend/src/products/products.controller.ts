@@ -40,21 +40,6 @@ export class ProductsController {
     return { isUnique };
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(id, updateProductDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.productsService.remove(id);
-  }
-
   @Get('meta/companies')
   getCompanies() {
     return this.productsService.getCompanies();
@@ -79,5 +64,21 @@ export class ProductsController {
   @Get('stats')
   getStats(@Query('companyId') companyId?: string) {
     return this.productsService.getStats(companyId);
+  }
+
+  // Place dynamic routes after all specific paths to avoid conflicts like '/products/stats'
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productsService.findOne(id);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
+    return this.productsService.update(id, updateProductDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.productsService.remove(id);
   }
 }

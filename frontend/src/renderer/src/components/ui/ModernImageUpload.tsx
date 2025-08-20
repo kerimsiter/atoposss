@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+
 import {
   Box,
   Typography,
@@ -12,13 +13,17 @@ import {
 import {
   CloudUpload as UploadIcon,
   Delete as DeleteIcon,
+  Star as StarIcon,
+  StarBorder as StarBorderIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
 
 interface ModernImageUploadProps {
-  value?: string;
-  onChange: (imageUrl: string | undefined) => void;
+  currentImages: string[];
+  onChange: (imageUrls: string[]) => void;
+  primaryImageUrl?: string;
+  onPrimaryImageChange?: (imageUrl: string | undefined) => void;
   disabled?: boolean;
   maxSize?: number; // in MB
   acceptedFormats?: string[];
@@ -39,17 +44,17 @@ const UploadContainer = styled(Box)(() => ({
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  
+
   '&:hover': {
     borderColor: '#2D68FF',
     background: '#F1F3FF',
   },
-  
+
   '&.dragover': {
     borderColor: '#2D68FF',
     background: '#F1F3FF',
   },
-  
+
   '&.disabled': {
     cursor: 'not-allowed',
     opacity: 0.6,
@@ -66,7 +71,7 @@ const PreviewContainer = styled(Box)(() => ({
   overflow: 'hidden',
   background: '#FDFDFD',
   border: '1px solid #E0E0E0',
-  
+
   '& img': {
     width: '100%',
     height: 200,
@@ -75,11 +80,11 @@ const PreviewContainer = styled(Box)(() => ({
   },
 }));
 
-
-
 const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
-  value,
+  currentImages,
   onChange,
+  primaryImageUrl,
+  onPrimaryImageChange,
   disabled = false,
   maxSize = 5,
   acceptedFormats = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
@@ -94,11 +99,11 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
     if (!acceptedFormats.includes(file.type)) {
       return `Desteklenen formatlar: ${acceptedFormats.map(f => f.split('/')[1].toUpperCase()).join(', ')}`;
     }
-    
+
     if (file.size > maxSize * 1024 * 1024) {
       return `Dosya boyutu ${maxSize}MB'dan küçük olmalıdır`;
     }
-    
+
     return null;
   };
 
@@ -130,7 +135,11 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
       });
 
       const imageUrl = `http://localhost:3000${response.data.url}`;
-      onChange(imageUrl);
+      const next = [...(currentImages || []), imageUrl];
+      onChange(next);
+      if (!primaryImageUrl && onPrimaryImageChange) {
+        onPrimaryImageChange(imageUrl);
+      }
     } catch (error: any) {
       setError(error.response?.data?.message || 'Dosya yüklenirken hata oluştu');
     } finally {
@@ -139,9 +148,13 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
     }
   };
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    uploadFile(files[0]);
+    // Çoklu seçim: sırayla yükle
+    for (let i = 0; i < files.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await uploadFile(files[i]);
+    }
   };
 
   const handleClick = () => {
@@ -164,19 +177,27 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    
+
     if (disabled || uploading) return;
-    
+
     const files = e.dataTransfer.files;
     handleFileSelect(files);
   }, [disabled, uploading]);
 
-  const handleRemove = () => {
-    onChange(undefined);
+  const handleRemove = (url: string) => {
+    const next = (currentImages || []).filter(u => u !== url);
+    onChange(next);
+    if (primaryImageUrl === url && onPrimaryImageChange) {
+      onPrimaryImageChange(next[0]);
+    }
     setError(null);
   };
 
-
+  const handleSetPrimary = (url: string) => {
+    if (onPrimaryImageChange) {
+      onPrimaryImageChange(url);
+    }
+  };
 
   return (
     <Box>
@@ -184,41 +205,12 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
         ref={fileInputRef}
         type="file"
         accept={acceptedFormats.join(',')}
+        multiple
         onChange={(e) => handleFileSelect(e.target.files)}
         style={{ display: 'none' }}
         disabled={disabled || uploading}
       />
-
-      {value && !uploading ? (
-        <Fade in timeout={300}>
-          <PreviewContainer>
-            <img src={value} alt="Product preview" />
-            <Box sx={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'rgba(0, 0, 0, 0.7)',
-              borderRadius: '50%',
-              backdropFilter: 'blur(8px)',
-            }}>
-              <Tooltip title="Resmi Kaldır">
-                <IconButton
-                  size="small"
-                  onClick={handleRemove}
-                  sx={{ 
-                    color: 'white',
-                    '&:hover': {
-                      background: 'rgba(255, 255, 255, 0.1)',
-                    }
-                  }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          </PreviewContainer>
-        </Fade>
-      ) : (
+      {(!currentImages || currentImages.length === 0) ? (
         <UploadContainer
           className={`${dragOver ? 'dragover' : ''} ${disabled ? 'disabled' : ''}`}
           onClick={handleClick}
@@ -226,8 +218,6 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-
-
           {uploading ? (
             <Stack spacing={3} alignItems="center" sx={{ width: '100%' }}>
               <Box sx={{
@@ -257,7 +247,7 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
                   <Box sx={{ width: 24, height: 2, background: '#727272', opacity: 0.1, borderRadius: 0.5 }} />
                 </Stack>
               </Box>
-              
+
               <Box sx={{ textAlign: 'center' }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#1B1B1B', mb: 0.5 }}>
                   Yükleniyor...
@@ -266,10 +256,10 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
                   %{uploadProgress} tamamlandı
                 </Typography>
               </Box>
-              
+
               <Box sx={{ width: '100%', maxWidth: 200 }}>
-                <LinearProgress 
-                  variant="determinate" 
+                <LinearProgress
+                  variant="determinate"
                   value={uploadProgress}
                   sx={{
                     height: 6,
@@ -285,7 +275,6 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
             </Stack>
           ) : (
             <Stack spacing={3} alignItems="center">
-              {/* File Icon */}
               <Box sx={{
                 width: 80,
                 height: 96,
@@ -307,14 +296,13 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
                   background: '#E2E2E2',
                   clipPath: 'polygon(100% 0, 0 0, 100% 100%)'
                 }} />
-                
+
                 <Stack spacing={1} alignItems="center" sx={{ p: 2 }}>
                   <Box sx={{ width: 20, height: 3, background: '#1B1B1B', opacity: 0.15, borderRadius: 1 }} />
                   <Box sx={{ width: 32, height: 3, background: '#727272', opacity: 0.1, borderRadius: 1 }} />
                   <Box sx={{ width: 32, height: 3, background: '#727272', opacity: 0.1, borderRadius: 1 }} />
                 </Stack>
-                
-                {/* Upload Icon */}
+
                 <Box sx={{
                   position: 'absolute',
                   bottom: 8,
@@ -330,7 +318,7 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
                   <UploadIcon sx={{ color: 'white', fontSize: 14 }} />
                 </Box>
               </Box>
-              
+
               <Box textAlign="center">
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, color: '#1B1B1B' }}>
                   Ürün Resmi Yükle
@@ -338,7 +326,7 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   Dosyayı buraya sürükleyin veya tıklayarak seçin
                 </Typography>
-                
+
                 <Stack direction="row" spacing={1} justifyContent="center" flexWrap="wrap">
                   <Typography variant="caption" sx={{
                     px: 2,
@@ -365,13 +353,98 @@ const ModernImageUpload: React.FC<ModernImageUploadProps> = ({
             </Stack>
           )}
         </UploadContainer>
+      ) : null}
+
+      {currentImages && currentImages.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={2} useFlexGap flexWrap="wrap">
+            {currentImages.map((url) => (
+              <Box key={url} sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}>
+                <Fade in timeout={300}>
+                  <PreviewContainer>
+                    <img src={url} alt="Product preview" />
+                    <Box sx={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      display: 'flex',
+                      gap: 1,
+                      background: 'rgba(0,0,0,0.4)',
+                      borderRadius: 20,
+                      p: 0.5,
+                    }}>
+                      <Tooltip title="Ana görsel yap">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleSetPrimary(url)}
+                          sx={{ color: 'white' }}
+                        >
+                          {primaryImageUrl === url ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Resmi Kaldır">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleRemove(url)}
+                          sx={{ color: 'white' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </PreviewContainer>
+                </Fade>
+              </Box>
+            ))}
+            <Box sx={{ width: { xs: '100%', sm: 'calc(50% - 8px)', md: 'calc(33.33% - 10px)' } }}>
+              <UploadContainer
+                className={`${dragOver ? 'dragover' : ''} ${disabled ? 'disabled' : ''}`}
+                onClick={handleClick}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                sx={{ minHeight: 200 }}
+              >
+                {uploading ? (
+                  <Stack spacing={3} alignItems="center" sx={{ width: '100%' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#1B1B1B', mb: 0.5 }}>
+                      Yükleniyor...
+                    </Typography>
+                    <Box sx={{ width: '100%', maxWidth: 200 }}>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={uploadProgress}
+                        sx={{
+                          height: 6,
+                          borderRadius: 3,
+                          background: 'rgba(168, 168, 168, 0.2)',
+                          '& .MuiLinearProgress-bar': {
+                            background: 'linear-gradient(90deg, #779DFF 0%, #2D68FF 100%)',
+                            borderRadius: 3,
+                          }
+                        }}
+                      />
+                    </Box>
+                  </Stack>
+                ) : (
+                  <Stack spacing={1} alignItems="center">
+                    <UploadIcon sx={{ color: '#2D68FF' }} />
+                    <Typography variant="body2" color="text.secondary">
+                      Görsel ekle
+                    </Typography>
+                  </Stack>
+                )}
+              </UploadContainer>
+            </Box>
+          </Stack>
+        </Box>
       )}
 
       {error && (
         <Fade in timeout={300}>
-          <Alert 
-            severity="error" 
-            sx={{ 
+          <Alert
+            severity="error"
+            sx={{
               mt: 2,
               borderRadius: 2,
               background: 'rgba(255, 82, 82, 0.1)',

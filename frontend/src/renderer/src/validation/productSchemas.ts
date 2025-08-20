@@ -69,7 +69,8 @@ export const productBaseSchema = z.object({
   taxId: z.string().min(1, 'Vergi oranı seçimi gereklidir'),
   trackStock: z.boolean(),
   unit: z.enum(['PIECE','KG','GRAM','LITER','ML','PORTION','BOX','PACKAGE']),
-  image: z.string().optional(),
+  image: z.string().optional().or(z.literal('')),
+  images: z.array(z.string().url('Geçerli bir görsel URL\'si olmalıdır')).optional(),
 });
 
 export const productCreateAdvancedSchema = z.object({
