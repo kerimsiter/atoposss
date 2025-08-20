@@ -17,7 +17,8 @@ import {
   GridColDef,
   GridRenderCellParams,
   GridSortModel,
-  GridPaginationModel
+  GridPaginationModel,
+  GridToolbar
 } from '@mui/x-data-grid';
 import { 
   Edit as EditIcon, 
@@ -37,7 +38,7 @@ interface ProductListProps {
 }
 
 function ProductList({ onEditProduct }: ProductListProps) {
-  const { products, deleteProduct, loading, fetchProducts, pagination } = useProductStore();
+  const { products, deleteProduct, loading, fetchProducts, pagination, error } = useProductStore() as any;
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'active' | 'inactive' | 'trackStock'>('all');
   // DataGrid zero-based page model
@@ -45,6 +46,17 @@ function ProductList({ onEditProduct }: ProductListProps) {
   const [sortModel, setSortModel] = useState<GridSortModel>([
     { field: 'createdAt', sort: 'desc' }
   ]);
+  const [columnVisibilityModel, setColumnVisibilityModel] = useState<Record<string, boolean>>({
+    createdAt: true,
+    code: true,
+    name: true,
+    barcode: true,
+    basePrice: true,
+    unit: true,
+    active: true,
+    trackStock: true,
+    actions: true,
+  });
 
   // Map UI filter to API params
   const apiFilters = useMemo(() => {
@@ -54,6 +66,20 @@ function ProductList({ onEditProduct }: ProductListProps) {
       trackStock: filterBy === 'trackStock' ? true : undefined,
     } as { active?: boolean; trackStock?: boolean };
   }, [filterBy]);
+
+  // date time formatter
+  const formatDateTime = useCallback((iso?: string) => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return new Intl.DateTimeFormat('tr-TR', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      }).format(d);
+    } catch {
+      return iso;
+    }
+  }, []);
 
   // Debounced search/filter fetch - reset to first page (0 in UI, 1 for API)
   useEffect(() => {
@@ -126,14 +152,18 @@ function ProductList({ onEditProduct }: ProductListProps) {
 
   // DataGrid columns
   const columns: GridColDef[] = useMemo(() => [
-    // Hidden column to enable default sorting by createdAt
+    // Date column (formatted)
     {
       field: 'createdAt',
       headerName: 'Oluşturulma',
-      hide: true,
       sortable: true,
-      minWidth: 0,
-      flex: 0
+      minWidth: 160,
+      flex: 0.8,
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Typography variant="body2" color="text.secondary">
+          {formatDateTime(params.row.createdAt)}
+        </Typography>
+      )
     },
     {
       field: 'code',
@@ -347,7 +377,41 @@ function ProductList({ onEditProduct }: ProductListProps) {
         </Stack>
       )
     },
-  ], [onEditProduct]);
+  ], [formatDateTime, onEditProduct]);
+
+  // Custom overlays
+  const NoRowsOverlay = useMemo(() => function NoRows() {
+    return (
+      <Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
+        <Avatar sx={{ 
+          width: 64, height: 64,
+          background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
+          color: '#2D68FF'
+        }}>
+          <InventoryIcon fontSize="large" />
+        </Avatar>
+        <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 500, mt: 2 }}>
+          {searchTerm || filterBy !== 'all' ? 'Arama kriterlerine uygun ürün bulunamadı' : 'Henüz ürün eklenmemiş'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {searchTerm || filterBy !== 'all' ? 'Farklı arama terimleri deneyin' : 'İlk ürününüzü eklemek için "Yeni Ürün Ekle" butonunu kullanın'}
+        </Typography>
+      </Stack>
+    );
+  }, [filterBy, searchTerm]);
+
+  const ErrorOverlay = useMemo(() => function Err() {
+    return (
+      <Stack alignItems="center" justifyContent="center" sx={{ py: 6 }}>
+        <Typography variant="h6" color="error" sx={{ fontWeight: 600 }}>
+          Bir hata oluştu
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {String(error ?? 'Veriler yüklenirken bir sorun oluştu.')}
+        </Typography>
+      </Stack>
+    );
+  }, [error]);
 
   return (
     <Box>
@@ -470,6 +534,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
           getRowId={(row) => row.id}
           rowCount={pagination.total}
           loading={loading}
+          error={error || undefined}
           paginationMode="server"
           sortingMode="server"
           paginationModel={paginationModel}
@@ -477,12 +542,24 @@ function ProductList({ onEditProduct }: ProductListProps) {
           sortModel={sortModel}
           onSortModelChange={handleSortModelChange}
           disableRowSelectionOnClick
-          disableColumnMenu
+          disableColumnMenu={false}
           checkboxSelection={false}
           showCellVerticalBorder={false}
           showColumnVerticalBorder={false}
           columnHeaderHeight={56}
           getRowHeight={() => 64}
+          columnVisibilityModel={columnVisibilityModel}
+          onColumnVisibilityModelChange={(model) => setColumnVisibilityModel(model)}
+          slots={{
+            toolbar: GridToolbar,
+            noRowsOverlay: NoRowsOverlay,
+            errorOverlay: ErrorOverlay,
+          }}
+          slotProps={{
+            toolbar: {
+              showQuickFilter: false,
+            }
+          }}
           sx={{
             '& .MuiDataGrid-columnHeaders': {
               background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
