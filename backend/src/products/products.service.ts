@@ -188,18 +188,47 @@ export class ProductsService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.product.findMany({
         where,
-        select: {
-          id: true,
-          name: true,
-          code: true,
-          barcode: true,
-          basePrice: true,
-          unit: true,
-          active: true,
-          trackStock: true,
-          image: true,
-          images: true,
-          createdAt: true,
+        // Tüm temel scalar alanlar (categoryId, taxId vb.) default olarak döner; ilişkileri include edelim
+        include: {
+          category: true,
+          tax: true,
+          company: true,
+          variants: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              code: true,
+              price: true,
+              active: true,
+              displayOrder: true,
+            }
+          },
+          modifierGroups: {
+            include: {
+              modifierGroup: {
+                select: {
+                  id: true,
+                  name: true,
+                  minSelection: true,
+                  maxSelection: true,
+                  required: true,
+                  freeSelection: true,
+                  active: true,
+                  displayOrder: true,
+                  modifiers: {
+                    select: {
+                      id: true,
+                      name: true,
+                      price: true,
+                      active: true,
+                      displayOrder: true,
+                    }
+                  }
+                }
+              }
+            }
+          }
         },
         orderBy: { [sortBy]: order },
         skip: (page - 1) * pageSize,
@@ -602,7 +631,7 @@ export class ProductsService {
 
   // Check if a product code is unique within a company. If companyId is not provided,
   // it defaults to the first active company.
-  async isCodeUnique(code: string, companyId?: string): Promise<boolean> {
+  async isCodeUnique(code: string, companyId?: string, excludeProductId?: string): Promise<boolean> {
     let effectiveCompanyId = companyId ?? null;
     if (!effectiveCompanyId || effectiveCompanyId === 'auto') {
       const firstCompany = await this.prisma.company.findFirst({
@@ -616,12 +645,17 @@ export class ProductsService {
       effectiveCompanyId = firstCompany.id;
     }
 
+    const whereClause: Prisma.ProductWhereInput = {
+      code,
+      companyId: effectiveCompanyId,
+      deletedAt: null,
+    };
+    if (excludeProductId) {
+      (whereClause as any).id = { not: excludeProductId };
+    }
+
     const existing = await this.prisma.product.findFirst({
-      where: {
-        code,
-        companyId: effectiveCompanyId,
-        deletedAt: null,
-      },
+      where: whereClause,
       select: { id: true },
     });
     return !existing;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense, useCallback } from 'react';
 import axios from 'axios';
 import {
   Box,
@@ -19,6 +19,7 @@ import {
   CategoryOutlined as CategoryIcon
 } from '@mui/icons-material';
 import { Product, useProductStore } from '../stores/useProductStore';
+import { useMetaStore } from '../stores/useMetaStore';
 import ProductList from '../components/product/ProductList';
 import ModernCard from '../components/ui/ModernCard';
 import ModernButton from '../components/ui/ModernButton';
@@ -27,6 +28,7 @@ const ProductForm = lazy(() => import('../components/product/ProductForm'));
 
 const ProductManagement: React.FC = () => {
   const { fetchProducts, loading, error, clearError, pagination } = useProductStore();
+  const { companies, fetchCompanies } = useMetaStore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -35,7 +37,9 @@ const ProductManagement: React.FC = () => {
   // Fetch products when component mounts (server-side pagination)
   useEffect(() => {
     fetchProducts({ page: 1, pageSize: 20, sortBy: 'createdAt', order: 'desc' });
-  }, [fetchProducts]);
+    // Şirketleri de yükle ki stats companyId ile çağrılabilsin
+    fetchCompanies();
+  }, [fetchProducts, fetchCompanies]);
 
   // Show error in snackbar
   useEffect(() => {
@@ -44,27 +48,38 @@ const ProductManagement: React.FC = () => {
     }
   }, [error]);
 
-  // Fetch product stats for dashboard cards
+  // Fetch product stats for dashboard cards (filtered by company when available)
+  const fetchStats = useCallback(async () => {
+    try {
+      const companyId = companies?.[0]?.id; // Şirket seçimi yoksa ilk şirketi kullan
+      const res = await axios.get('http://localhost:3000/products/stats', {
+        params: companyId ? { companyId } : undefined,
+      });
+      setStats(res.data);
+    } catch (e) {
+      console.error('Failed to fetch product stats', e);
+    }
+  }, [companies]);
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const res = await axios.get('http://localhost:3000/products/stats');
-        setStats(res.data);
-      } catch (e) {
-        console.error('Failed to fetch product stats', e);
-      }
-    };
     fetchStats();
-  }, []);
+  }, [fetchStats]);
 
   const handleAddProduct = () => {
     setSelectedProduct(null);
     setIsFormOpen(true);
   };
 
-  const handleEditProduct = (product: Product) => {
+  const handleEditProduct = async (product: Product) => {
+    // Open quickly with existing list item, then hydrate with freshest data
     setSelectedProduct(product);
     setIsFormOpen(true);
+    try {
+      const res = await axios.get(`http://localhost:3000/products/${product.id}`);
+      if (res?.data) setSelectedProduct(res.data);
+    } catch (e) {
+      console.warn('Failed to fetch latest product details:', e);
+    }
   };
 
   const handleCloseForm = () => {
@@ -76,6 +91,7 @@ const ProductManagement: React.FC = () => {
     const page = pagination?.page || 1;
     const pageSize = pagination?.pageSize || 20;
     fetchProducts({ page, pageSize, sortBy: 'createdAt', order: 'desc' });
+    fetchStats();
   };
 
   const handleCloseSnackbar = () => {

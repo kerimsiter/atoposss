@@ -224,9 +224,33 @@ export const useProductStore = create<ProductStore>((set) => ({
         selectedProduct: state.selectedProduct?.id === id ? updatedProduct : state.selectedProduct,
         loading: false
       }));
-    } catch (error) {
+    } catch (error: any) {
+      // Backend hata detaylarını günlükle ve kullanıcıya anlaşılır mesaj göster
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      if (status) {
+        console.error('Update product failed:', status, data);
+      } else {
+        console.error('Update product failed:', error);
+      }
+      let friendly = 'Ürün güncellenemedi';
+      const rawMsg = data?.message;
+      if (Array.isArray(rawMsg)) {
+        friendly = rawMsg.join('\n');
+      } else if (typeof rawMsg === 'string') {
+        if (rawMsg.toLowerCase().includes('unique') || rawMsg.toLowerCase().includes('constraint')) {
+          friendly = 'Bu şirket için ürün kodu benzersiz olmalıdır. Lütfen farklı bir kod girin.';
+        } else {
+          friendly = rawMsg;
+        }
+      } else if (status === 404) {
+        friendly = 'Ürün bulunamadı veya silinmiş olabilir.';
+      } else if (status === 409) {
+        friendly = 'Bu şirket için ürün kodu zaten mevcut.';
+      }
+
       set({ 
-        error: error instanceof Error ? error.message : 'Failed to update product',
+        error: friendly,
         loading: false 
       });
       throw error;

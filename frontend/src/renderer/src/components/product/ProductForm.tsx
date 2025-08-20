@@ -26,6 +26,7 @@ import { productFullSchema, modifierGroupSchema } from '../../validation/product
 import { z } from 'zod';
 import { useForm, FormProvider } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import axios from 'axios';
 
 interface ProductFormProps {
   open: boolean;
@@ -35,6 +36,8 @@ interface ProductFormProps {
 
 type FormValues = z.input<typeof productFullSchema>;
 
+const API_BASE_URL = 'http://localhost:3000';
+
 const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => {
   const { addProduct, updateProduct, loading, error, clearError, products, fetchProducts } = useProductStore();
   const { categories, taxes, fetchCategories, fetchTaxes, loading: metaLoading } = useMetaStore();
@@ -43,13 +46,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
 
   // Tabs & advanced sections local state (UI only for now)
   const [activeTab, setActiveTab] = useState<ProductFormTabKey>('general');
+  const [submitNotice, setSubmitNotice] = useState<string | null>(null);
   // Variants & modifierGroups & allergens now RHF-managed via RHF
   // Avoid Save button flicker: treat metaLoading as blocking only until core meta is first available
   const metaBlocking = metaLoading && categories.length === 0 && taxes.length === 0;
 
   // Build resolver schema with duplicate code check (superRefine)
   const resolverSchema = useMemo(() =>
-    productFullSchema.superRefine((data, ctx) => {
+    productFullSchema.superRefine(async (data, ctx) => {
       const codeTrim = (data.code ?? '').trim();
       if (!codeTrim) return;
       const exists = products.some(p =>
@@ -57,6 +61,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       );
       if (exists) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Bu ürün kodu zaten kullanılıyor' });
+      }
+      // Backend doğrulaması (edit modunda kendi ürününü hariç tut)
+      try {
+        const companyParam = product?.companyId ?? 'auto';
+        const res = await axios.get(`${API_BASE_URL}/products/check-code-uniqueness`, {
+          params: {
+            code: codeTrim,
+            companyId: companyParam,
+            currentProductId: product?.id,
+          }
+        });
+        if (!res.data?.isUnique) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Bu ürün kodu zaten kullanılıyor' });
+        }
+      } catch (e) {
+        // Backend erişilemez ise formu bu sebeple bloklamayalım
       }
       // Variant SKU uniqueness (ignore empty)
       const skus = new Map<string, number[]>();
@@ -111,29 +131,33 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
   // Fetch meta data when dialog opens
   useEffect(() => {
     if (open) {
-      fetchCategories();
-      fetchTaxes();
+      // Edit modunda, ilgili şirketin meta verilerini getir
+      if (product?.companyId) {
+        fetchCategories(product.companyId);
+        fetchTaxes(product.companyId);
+      } else {
+        fetchCategories();
+        fetchTaxes();
+      }
       // Ensure we have the latest products for duplicate code validation
       fetchProducts();
     }
-  }, [open, fetchCategories, fetchTaxes, fetchProducts]);
+  }, [open, product?.companyId, fetchCategories, fetchTaxes, fetchProducts]);
 
   // Reset form when dialog opens/closes or product changes
   useEffect(() => {
     if (open) {
       if (product) {
         // Edit mode - populate form with existing product data
-        const validCategoryId = categories.some(cat => cat.id === product.categoryId) ? product.categoryId : '';
-        const validTaxId = taxes.some(tax => tax.id === product.taxId) ? product.taxId : '';
-
+        // Ürün değerlerini doğrudan ata; meta daha sonra gelse bile seçili kalmalı
         reset({
           name: product.name,
           code: product.code,
           barcode: product.barcode || '',
           description: product.description || '',
           basePrice: Number(product.basePrice),
-          categoryId: validCategoryId,
-          taxId: validTaxId,
+          categoryId: product.categoryId || '',
+          taxId: product.taxId || '',
           trackStock: product.trackStock,
           unit: product.unit as any,
           image: product.image,
@@ -206,6 +230,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       }
       // RHF handles base errors; advanced errors handled separately
       clearError();
+      setSubmitNotice(null);
       setActiveTab('general');
     }
   }, [open, product, categories, taxes, clearError]);
@@ -306,6 +331,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
     // First validate base fields via RHF
     const rhfOk = await trigger();
     if (!rhfOk || !validateForm()) {
+      // RHF hatalarına göre uygun sekmeye geç
+      const errs: any = formState.errors as any;
+      if (errs?.variants) {
+        setActiveTab('variants');
+      } else if (errs?.modifierGroups) {
+        setActiveTab('modifiers');
+      } else if (errs?.allergens) {
+        setActiveTab('allergens');
+      } else {
+        setActiveTab('general');
+      }
+      setSubmitNotice('Formda hatalar var. Lütfen vurgulanan alanları düzeltin.');
       return;
     }
 
@@ -352,6 +389,15 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
           const k = iss.path[0] as keyof typeof baseValues;
           if (k) setError(k as any, { type: 'zod', message: iss.message });
         });
+        // Zod hatalarında da sekme yönlendirmesi yapalım
+        const hasVariantErr = parsed.error.issues.some(i => String(i.path[0]) === 'variants');
+        const hasModErr = parsed.error.issues.some(i => String(i.path[0]) === 'modifierGroups');
+        const hasAllergenErr = parsed.error.issues.some(i => String(i.path[0]) === 'allergens');
+        if (hasVariantErr) setActiveTab('variants');
+        else if (hasModErr) setActiveTab('modifiers');
+        else if (hasAllergenErr) setActiveTab('allergens');
+        else setActiveTab('general');
+        setSubmitNotice('Formda hatalar var. Lütfen vurgulanan alanları düzeltin.');
         return;
       }
 
@@ -360,6 +406,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
       } else {
         await addProduct(payload);
       }
+      setSubmitNotice(null);
       onClose();
     } catch (error) {
       console.error('Form submission error:', error);
@@ -401,20 +448,20 @@ const ProductForm: React.FC<ProductFormProps> = ({ open, onClose, product }) => 
         <Fade in={open} timeout={300}>
           <Box>
           <FormProvider {...formMethods}>
-            {error && (
+            {(error || submitNotice) && (
               <Alert
-                severity="error"
+                severity={error ? 'error' : 'warning'}
                 sx={{
                   mb: 3,
                   borderRadius: 2,
-                  background: 'rgba(255, 82, 82, 0.1)',
-                  border: '1px solid rgba(255, 82, 82, 0.2)',
+                  background: error ? 'rgba(255, 82, 82, 0.1)' : 'rgba(255, 193, 7, 0.12)',
+                  border: error ? '1px solid rgba(255, 82, 82, 0.2)' : '1px solid rgba(255, 193, 7, 0.3)',
                   '& .MuiAlert-icon': {
-                    color: '#FF5252'
+                    color: error ? '#FF5252' : '#FFC107'
                   }
                 }}
               >
-                {error}
+                {error || submitNotice}
               </Alert>
             )}
 

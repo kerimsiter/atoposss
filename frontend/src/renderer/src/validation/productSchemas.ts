@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import axios from 'axios';
 
 export const variantSchema = z.object({
   id: z.string().optional(),
@@ -45,23 +44,7 @@ export const productBaseSchema = z.object({
   code: z
     .string()
     .trim()
-    .min(1, 'Ürün kodu gereklidir')
-    .refine(
-      async (code) => {
-        if (!code) return true;
-        const API_BASE_URL = 'http://localhost:3000';
-        try {
-          const res = await axios.get(
-            `${API_BASE_URL}/products/check-code-uniqueness/${encodeURIComponent(code)}/auto`
-          );
-          return Boolean(res.data?.isUnique);
-        } catch (e) {
-          // Backend erişilemezse formu bloklamayalım; create sırasında backend zaten kontrol edecek
-          return true;
-        }
-      },
-      'Bu ürün kodu zaten kullanılıyor'
-    ),
+    .min(1, 'Ürün kodu gereklidir'),
   barcode: z.string().optional(),
   description: z.string().optional(),
   basePrice: z.number().min(0.01, 'Fiyat 0\'dan büyük olmalıdır'),

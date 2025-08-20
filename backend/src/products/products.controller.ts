@@ -29,14 +29,16 @@ export class ProductsController {
     return this.productsService.findAll(query);
   }
 
-  // Check uniqueness of product code per company
-  @Get('check-code-uniqueness/:code/:companyId')
+  // Check uniqueness of product code per company (using query params)
+  // Example: GET /products/check-code-uniqueness?code=ABC&companyId=auto&currentProductId=123
+  @Get('check-code-uniqueness')
   @HttpCode(HttpStatus.OK)
   async checkCodeUniqueness(
-    @Param('code') code: string,
-    @Param('companyId') companyId: string,
+    @Query('code') code: string,
+    @Query('companyId') companyId: string,
+    @Query('currentProductId') currentProductId?: string,
   ) {
-    const isUnique = await this.productsService.isCodeUnique(code, companyId);
+    const isUnique = await this.productsService.isCodeUnique(code, companyId, currentProductId);
     return { isUnique };
   }
 
