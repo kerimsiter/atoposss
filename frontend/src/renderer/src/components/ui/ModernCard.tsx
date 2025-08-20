@@ -8,7 +8,7 @@ interface ModernCardProps extends CardProps {
 
 const StyledCard = styled(Card, {
   shouldForwardProp: (prop) => prop !== 'glassmorphism' && prop !== 'hover',
-})<ModernCardProps>(({ theme, glassmorphism, hover }) => ({
+})<ModernCardProps>(({ glassmorphism, hover }) => ({
   borderRadius: 16,
   border: '1.5px solid rgba(246, 246, 246, 1)',
   background: glassmorphism 

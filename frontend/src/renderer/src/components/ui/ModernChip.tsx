@@ -7,7 +7,7 @@ interface ModernChipProps extends ChipProps {
 
 const StyledChip = styled(Chip, {
   shouldForwardProp: (prop) => prop !== 'gradient',
-})<ModernChipProps>(({ theme, gradient, color }) => ({
+})<ModernChipProps>(({ gradient, color }) => ({
   borderRadius: 8,
   fontSize: '0.75rem',
   fontWeight: 500,

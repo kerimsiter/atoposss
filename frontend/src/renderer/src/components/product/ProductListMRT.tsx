@@ -11,7 +11,6 @@ import {
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  FilterList as FilterIcon,
   Inventory as InventoryIcon,
   ViewColumn as ColumnsIcon,
 } from '@mui/icons-material';
@@ -24,6 +23,7 @@ import {
   type MRT_VisibilityState,
   type MRT_ColumnSizingState,
 } from 'material-react-table';
+import { MRT_Localization_TR } from 'material-react-table/locales/tr';
 import ModernTextField from '../ui/ModernTextField';
 import ModernChip from '../ui/ModernChip';
 import { useProductStore, type Product } from '../../stores/useProductStore';
@@ -267,6 +267,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   const table = useMaterialReactTable<Product>({
     columns,
     data: products,
+    localization: MRT_Localization_TR,
     state: {
       isLoading: loading,
       sorting,
@@ -280,11 +281,13 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
-    onPaginationChange: ({ pageIndex, pageSize }) => {
-      // store zaten fetchProducts ile güncellenecek; burada sadece trigger amaçlı set çağrısı yapıyoruz
+    onPaginationChange: (updater) => {
+      // MRT v3 Updater<PaginationState> alır, doğrudan destrüktüre edilmez
+      const current = { pageIndex: pagination.page - 1, pageSize: pagination.pageSize };
+      const next = typeof updater === 'function' ? (updater as any)(current) : (updater as any);
       fetchProducts({
-        page: pageIndex + 1,
-        pageSize,
+        page: (next?.pageIndex ?? current.pageIndex) + 1,
+        pageSize: next?.pageSize ?? current.pageSize,
         search: searchTerm || undefined,
       });
     },
@@ -307,7 +310,10 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         background: 'rgba(253, 253, 253, 0.8)',
         backdropFilter: 'blur(32px)',
         boxShadow: '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
-        overflow: 'hidden',
+        // Küçük ekranlarda sağa kaydırma için yatay scroll aç
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        maxWidth: '100%',
       },
     },
     muiTableHeadCellProps: {
@@ -344,7 +350,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
           <Button
             size="small"
             startIcon={<ColumnsIcon sx={{ fontSize: 18 }} />}
-            onClick={() => table.setShowColumnFilters(!table.getIsShowColumnFilters())}
+            onClick={() => table.setShowColumnFilters(!table.getState().showColumnFilters)}
             sx={{
               textTransform: 'none',
               borderRadius: 999,

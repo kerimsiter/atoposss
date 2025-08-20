@@ -8,7 +8,7 @@ interface ModernButtonProps extends ButtonProps {
 
 const StyledButton = styled(Button, {
   shouldForwardProp: (prop) => prop !== 'gradient' && prop !== 'glassmorphism',
-})<ModernButtonProps>(({ theme, gradient, glassmorphism }) => ({
+})<ModernButtonProps>(({ gradient, glassmorphism }) => ({
   borderRadius: 12,
   padding: '12px 24px',
   fontSize: '0.875rem',
