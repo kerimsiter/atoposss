@@ -154,7 +154,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
   return (
     <Box>
       {/* Search and Filter Controls */}
-      <Stack direction="row" spacing={3} alignItems="center" sx={{ mb: 4 }}>
+      <Stack direction="row" spacing={3} alignItems="center" sx={{ mb: 4, position: 'relative', zIndex: 2 }}>
         <ModernTextField
           placeholder="Ürün adı, kodu veya barkod ile ara..."
           value={searchTerm}
@@ -162,6 +162,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
           size="small"
           sx={{ 
             minWidth: 320,
+            pointerEvents: 'auto',
             '& .MuiOutlinedInput-root': {
               borderRadius: 12,
               background: '#F8F9FA',
@@ -256,6 +257,8 @@ function ProductList({ onEditProduct }: ProductListProps) {
 
       {/* Products Table */}
       <TableContainer sx={{
+        position: 'relative',
+        zIndex: 1,
         borderRadius: 3,
         border: '1.5px solid rgba(246, 246, 246, 1)',
         background: 'rgba(253, 253, 253, 0.8)',
