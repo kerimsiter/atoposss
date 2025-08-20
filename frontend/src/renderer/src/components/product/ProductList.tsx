@@ -10,7 +10,8 @@ import {
   Stack,
   Avatar,
   Tooltip,
-  InputAdornment
+  InputAdornment,
+  Button,
 } from '@mui/material';
 import {
   DataGrid,
@@ -26,19 +27,21 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   Inventory as InventoryIcon,
-  LocalOffer as PriceIcon
+  LocalOffer as PriceIcon,
+  ViewColumn as ColumnsIcon
 } from '@mui/icons-material';
 import { Product, useProductStore } from '../../stores/useProductStore';
 import { formatPrice } from '../../utils/formatters';
 import ModernTextField from '../ui/ModernTextField';
 import ModernChip from '../ui/ModernChip';
+import ColumnOrderDialog from './ColumnOrderDialog';
 
 interface ProductListProps {
   onEditProduct: (product: Product) => void;
 }
 
 function ProductList({ onEditProduct }: ProductListProps) {
-  const { products, deleteProduct, loading, fetchProducts, pagination, error } = useProductStore() as any;
+  const { products, deleteProduct, loading, fetchProducts, pagination } = useProductStore() as any;
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'active' | 'inactive' | 'trackStock'>('all');
   // DataGrid zero-based page model
@@ -49,7 +52,10 @@ function ProductList({ onEditProduct }: ProductListProps) {
   const STORAGE_KEYS = {
     visibility: 'productList.columnVisibility',
     widths: 'productList.columnWidths',
+    order: 'productList.columnOrder',
   } as const;
+
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
   const [columnVisibilityModel, setColumnVisibilityModel] = useState<Record<string, boolean>>(() => {
     try {
@@ -67,6 +73,15 @@ function ProductList({ onEditProduct }: ProductListProps) {
       trackStock: true,
       actions: true,
     } as Record<string, boolean>;
+  });
+
+  // Column order persistence
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.order);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
   });
 
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -95,6 +110,12 @@ function ProductList({ onEditProduct }: ProductListProps) {
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEYS.widths, JSON.stringify(columnWidths)); } catch {}
   }, [columnWidths]);
+
+  // Persist order
+  useEffect(() => {
+    if (!columnOrder || columnOrder.length === 0) return;
+    try { localStorage.setItem(STORAGE_KEYS.order, JSON.stringify(columnOrder)); } catch {}
+  }, [columnOrder]);
 
   // date time formatter
   const formatDateTime = useCallback((iso?: string) => {
@@ -417,6 +438,37 @@ function ProductList({ onEditProduct }: ProductListProps) {
     },
   ], [formatDateTime, onEditProduct]);
 
+  // Compute default order from current columns if needed
+  const defaultOrderedFields = useMemo(() => columns.map(c => c.field), [columns]);
+  const columnLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    columns.forEach(c => { map[c.field] = (c.headerName as string) || c.field; });
+    return map;
+  }, [columns]);
+  const initialOrderedFields = useMemo(() => {
+    if (columnOrder && columnOrder.length > 0) {
+      // keep only existing fields, append any new fields not present in saved order
+      const known = new Set(defaultOrderedFields);
+      const sanitized = columnOrder.filter(f => known.has(f));
+      const missing = defaultOrderedFields.filter(f => !sanitized.includes(f));
+      return [...sanitized, ...missing];
+    }
+    return defaultOrderedFields;
+  }, [columnOrder, defaultOrderedFields]);
+
+  // Reorder columns array according to current ordered fields (controlled order)
+  const orderedColumns = useMemo(() => {
+    const map = new Map(columns.map(c => [c.field, c] as const));
+    const result: GridColDef[] = [];
+    for (const f of initialOrderedFields) {
+      const col = map.get(f);
+      if (col) result.push(col);
+    }
+    // append any remaining columns just in case
+    columns.forEach(c => { if (!result.includes(c)) result.push(c); });
+    return result;
+  }, [columns, initialOrderedFields]);
+
   // Custom overlays
   const NoRowsOverlay = useMemo(() => function NoRows() {
     return (
@@ -542,6 +594,40 @@ function ProductList({ onEditProduct }: ProductListProps) {
             Toplam {pagination.total} kayıt
           </Typography>
         </Box>
+
+        <Box sx={{ flexGrow: 1 }} />
+        <Tooltip title="Kolon Sırası" arrow>
+          <Button
+            size="small"
+            startIcon={<ColumnsIcon sx={{ fontSize: 18 }} />}
+            onClick={() => setOrderDialogOpen(true)}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 999,
+              px: 1.75,
+              py: 0.75,
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              bgcolor: 'rgba(45, 104, 255, 0.08)',
+              color: '#2D68FF',
+              border: '1px solid rgba(45, 104, 255, 0.25)',
+              boxShadow: '0 2px 6px rgba(45, 104, 255, 0.15)',
+              '&:hover': {
+                bgcolor: 'rgba(45, 104, 255, 0.16)',
+                borderColor: 'rgba(45, 104, 255, 0.35)',
+                boxShadow: '0 3px 10px rgba(45, 104, 255, 0.2)'
+              },
+              '&:active': {
+                bgcolor: 'rgba(45, 104, 255, 0.22)'
+              },
+              '& .MuiButton-startIcon': {
+                mr: 1
+              }
+            }}
+          >
+            Kolon Sırası
+          </Button>
+        </Tooltip>
       </Stack>
       {/* Products DataGrid */}
       <Box sx={{
@@ -557,7 +643,7 @@ function ProductList({ onEditProduct }: ProductListProps) {
       }}>
         <DataGrid
           rows={products}
-          columns={columns}
+          columns={orderedColumns}
           getRowId={(row) => row.id}
           rowCount={pagination.total}
           loading={loading}
@@ -567,6 +653,32 @@ function ProductList({ onEditProduct }: ProductListProps) {
           onPaginationModelChange={handlePaginationModelChange}
           sortModel={sortModel}
           onSortModelChange={handleSortModelChange}
+          onStateChange={(state: any) => {
+            // debug
+            try {
+              const ordered = state.columns?.orderedFields;
+              if (ordered) console.log('state.columns.orderedFields', ordered);
+            } catch {}
+          }}
+          onColumnOrderChange={(params: any) => {
+            // debug
+            try { console.log('onColumnOrderChange', params); } catch {}
+            const { column, targetIndex } = params || {};
+            const field: string | undefined = column?.field;
+            if (!field || typeof targetIndex !== 'number') return;
+            setColumnOrder(prev => {
+              const current = (prev && prev.length > 0) ? [...prev] : defaultOrderedFields.slice();
+              // ensure all current fields exist
+              const withAll = Array.from(new Set([...current, ...defaultOrderedFields]));
+              // move field to targetIndex
+              const from = withAll.indexOf(field);
+              if (from === -1) return withAll;
+              withAll.splice(from, 1);
+              const idx = Math.max(0, Math.min(targetIndex, withAll.length));
+              withAll.splice(idx, 0, field);
+              return withAll;
+            });
+          }}
           onColumnWidthChange={(params: any) => {
             const { colDef, width } = params || {};
             if (!colDef?.field || typeof width !== 'number') return;
@@ -590,6 +702,9 @@ function ProductList({ onEditProduct }: ProductListProps) {
               showQuickFilter: false,
             }
           }}
+          initialState={{
+            columns: { orderedFields: initialOrderedFields }
+          }}
           sx={{
             '& .MuiDataGrid-columnHeaders': {
               background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
@@ -599,6 +714,12 @@ function ProductList({ onEditProduct }: ProductListProps) {
               fontSize: '0.875rem',
               fontWeight: 600,
               color: '#1B1B1B',
+            },
+            '& .MuiDataGrid-columnHeaderDraggableContainer': {
+              cursor: 'grab',
+            },
+            '& .MuiDataGrid-columnHeader, & .MuiDataGrid-columnHeader *': {
+              pointerEvents: 'auto',
             },
             '& .MuiDataGrid-cell': {
               display: 'flex',
@@ -613,7 +734,16 @@ function ProductList({ onEditProduct }: ProductListProps) {
           }}
         />
       </Box>
-      </Box>
-    );
-  }
-export default React.memo(ProductList)
+      <ColumnOrderDialog // Render dialog
+        open={orderDialogOpen}
+        onClose={() => setOrderDialogOpen(false)}
+        defaultFields={defaultOrderedFields}
+        labels={columnLabels}
+        value={initialOrderedFields}
+        onChange={(next) => setColumnOrder(next)}
+      />
+    </Box>
+  );
+}
+
+export default React.memo(ProductList);
