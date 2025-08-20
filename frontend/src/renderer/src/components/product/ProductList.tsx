@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   IconButton,
   Select,
   MenuItem,
@@ -16,11 +10,15 @@ import {
   Stack,
   Avatar,
   Tooltip,
-  Fade,
-  Skeleton,
-  InputAdornment,
-  Pagination
+  InputAdornment
 } from '@mui/material';
+import {
+  DataGrid,
+  GridColDef,
+  GridRenderCellParams,
+  GridSortModel,
+  GridPaginationModel
+} from '@mui/x-data-grid';
 import { 
   Edit as EditIcon, 
   Delete as DeleteIcon,
@@ -42,8 +40,11 @@ function ProductList({ onEditProduct }: ProductListProps) {
   const { products, deleteProduct, loading, fetchProducts, pagination } = useProductStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'all' | 'active' | 'inactive' | 'trackStock'>('all');
-  const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(20);
+  // DataGrid zero-based page model
+  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({ page: 0, pageSize: 20 });
+  const [sortModel, setSortModel] = useState<GridSortModel>([
+    { field: 'createdAt', sort: 'desc' }
+  ]);
 
   // Map UI filter to API params
   const apiFilters = useMemo(() => {
@@ -54,54 +55,48 @@ function ProductList({ onEditProduct }: ProductListProps) {
     } as { active?: boolean; trackStock?: boolean };
   }, [filterBy]);
 
-  // Debounced search/filter fetch
+  // Debounced search/filter fetch - reset to first page (0 in UI, 1 for API)
   useEffect(() => {
     const handle = setTimeout(() => {
-      setPage(1); // search/filter change resets to first page
+      setPaginationModel(pm => ({ ...pm, page: 0 }));
+      const activeSort = sortModel[0];
       fetchProducts({
         page: 1,
-        pageSize,
+        pageSize: paginationModel.pageSize,
         search: searchTerm || undefined,
         ...apiFilters,
-        sortBy: 'createdAt',
-        order: 'desc',
+        sortBy: (activeSort?.field as any) || 'createdAt',
+        order: (activeSort?.sort as any) || 'desc',
       });
     }, 400);
     return () => clearTimeout(handle);
-  }, [searchTerm, apiFilters, pageSize, fetchProducts]);
+  }, [searchTerm, apiFilters, paginationModel.pageSize, sortModel, fetchProducts]);
 
-  // Page change fetch
-  const handlePageChange = useCallback(
-    (_: React.ChangeEvent<unknown>, newPage: number) => {
-      setPage(newPage);
-      fetchProducts({
-        page: newPage,
-        pageSize,
-        search: searchTerm || undefined,
-        ...apiFilters,
-        sortBy: 'createdAt',
-        order: 'desc',
-      });
-    },
-    [pageSize, searchTerm, apiFilters, fetchProducts]
-  );
+  const handlePaginationModelChange = useCallback((model: GridPaginationModel) => {
+    setPaginationModel(model);
+    const activeSort = sortModel[0];
+    fetchProducts({
+      page: model.page + 1,
+      pageSize: model.pageSize,
+      search: searchTerm || undefined,
+      ...apiFilters,
+      sortBy: (activeSort?.field as any) || 'createdAt',
+      order: (activeSort?.sort as any) || 'desc',
+    });
+  }, [apiFilters, fetchProducts, searchTerm, sortModel]);
 
-  const handlePageSizeChange = useCallback(
-    (e: React.ChangeEvent<{ value: unknown }> | any) => {
-      const newSize = Number(e.target.value) || 20;
-      setPageSize(newSize);
-      setPage(1);
-      fetchProducts({
-        page: 1,
-        pageSize: newSize,
-        search: searchTerm || undefined,
-        ...apiFilters,
-        sortBy: 'createdAt',
-        order: 'desc',
-      });
-    },
-    [searchTerm, apiFilters, fetchProducts]
-  );
+  const handleSortModelChange = useCallback((model: GridSortModel) => {
+    setSortModel(model);
+    const next = model[0];
+    fetchProducts({
+      page: paginationModel.page + 1,
+      pageSize: paginationModel.pageSize,
+      search: searchTerm || undefined,
+      ...apiFilters,
+      sortBy: (next?.field as any) || 'createdAt',
+      order: (next?.sort as any) || 'desc',
+    });
+  }, [apiFilters, fetchProducts, paginationModel.page, paginationModel.pageSize, searchTerm]);
 
   const handleDeleteProduct = async (id: string, productName: string) => {
     if (window.confirm(`"${productName}" ürününü silmek istediğinizden emin misiniz?`)) {
@@ -129,27 +124,230 @@ function ProductList({ onEditProduct }: ProductListProps) {
     return unitLabels[unit] || unit;
   };
 
-  const LoadingSkeleton = () => (
-    <>
-      {[...Array(5)].map((_, index) => (
-        <TableRow key={index}>
-          <TableCell><Skeleton variant="text" width={80} /></TableCell>
-          <TableCell><Skeleton variant="text" width={200} /></TableCell>
-          <TableCell><Skeleton variant="text" width={100} /></TableCell>
-          <TableCell align="right"><Skeleton variant="text" width={60} /></TableCell>
-          <TableCell><Skeleton variant="text" width={50} /></TableCell>
-          <TableCell><Skeleton variant="rounded" width={60} height={28} /></TableCell>
-          <TableCell><Skeleton variant="rounded" width={60} height={28} /></TableCell>
-          <TableCell align="center">
-            <Stack direction="row" spacing={1} justifyContent="center">
-              <Skeleton variant="circular" width={32} height={32} />
-              <Skeleton variant="circular" width={32} height={32} />
+  // DataGrid columns
+  const columns: GridColDef[] = useMemo(() => [
+    // Hidden column to enable default sorting by createdAt
+    {
+      field: 'createdAt',
+      headerName: 'Oluşturulma',
+      hide: true,
+      sortable: true,
+      minWidth: 0,
+      flex: 0
+    },
+    {
+      field: 'code',
+      headerName: 'Ürün Kodu',
+      minWidth: 140,
+      flex: 0.6,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2" sx={{ 
+          fontWeight: 600, 
+          fontFamily: 'monospace',
+          color: '#2D68FF',
+          fontSize: '0.875rem'
+        }}>
+          {params.value as string}
+        </Typography>
+      )
+    },
+    {
+      field: 'name',
+      headerName: 'Ürün Bilgileri',
+      minWidth: 260,
+      flex: 1.4,
+      sortable: true,
+      renderCell: (params: GridRenderCellParams<Product>) => {
+        const product = params.row as Product;
+        const image = (product.image || (product as any).images?.[0]) as any;
+        return (
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ py: 0.5 }}>
+            <Box sx={{ position: 'relative' }}>
+              <Avatar
+                src={image}
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 2,
+                  background: image ? 'transparent' : 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
+                  border: '1.5px solid rgba(246, 246, 246, 1)',
+                }}
+              >
+                {!image && <InventoryIcon color="primary" />}
+              </Avatar>
+              {Array.isArray((product as any).images) && (product as any).images.length > 1 && (
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: -4,
+                    right: -4,
+                    background: 'rgba(45, 104, 255, 0.9)',
+                    color: 'white',
+                    borderRadius: '10px',
+                    px: 0.75,
+                    py: 0.25,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  {(product as any).images.length}
+                </Box>
+              )}
+            </Box>
+            <Stack spacing={0.5}>
+              <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                {product.name}
+              </Typography>
+              {product.description && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                  {product.description}
+                </Typography>
+              )}
             </Stack>
-          </TableCell>
-        </TableRow>
-      ))}
-    </>
-  );
+          </Stack>
+        );
+      }
+    },
+    {
+      field: 'barcode',
+      headerName: 'Barkod',
+      minWidth: 160,
+      flex: 0.8,
+      renderCell: (params: GridRenderCellParams) => (
+        <Typography variant="body2" sx={{ 
+          fontFamily: 'monospace',
+          color: params.value ? '#1B1B1B' : '#727272',
+          fontSize: '0.875rem'
+        }}>
+          {(params.value as string) || '—'}
+        </Typography>
+      )
+    },
+    {
+      field: 'basePrice',
+      headerName: 'Fiyat',
+      type: 'number',
+      minWidth: 140,
+      flex: 0.8,
+      align: 'right',
+      headerAlign: 'right',
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Stack alignItems="flex-end" spacing={0.5} sx={{ width: '100%' }}>
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <PriceIcon fontSize="small" color="success" />
+            <Typography variant="body2" sx={{ 
+              fontWeight: 700, 
+              color: '#00A656',
+              fontSize: '0.875rem'
+            }}>
+              ₺{formatPrice(params.row.basePrice as any)}
+            </Typography>
+          </Stack>
+        </Stack>
+      )
+    },
+    {
+      field: 'unit',
+      headerName: 'Birim',
+      minWidth: 120,
+      flex: 0.6,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ModernChip
+            label={getUnitLabel(params.row.unit)}
+            size="small"
+            sx={{ fontSize: '0.75rem' }}
+          />
+        </Box>
+      )
+    },
+    {
+      field: 'active',
+      headerName: 'Durum',
+      minWidth: 140,
+      flex: 0.7,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ModernChip
+            label={params.row.active ? 'Aktif' : 'Pasif'}
+            color={params.row.active ? 'success' : 'default'}
+            gradient={params.row.active}
+            size="small"
+          />
+        </Box>
+      )
+    },
+    {
+      field: 'trackStock',
+      headerName: 'Stok Takibi',
+      minWidth: 160,
+      flex: 0.8,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ModernChip
+            label={params.row.trackStock ? 'Evet' : 'Hayır'}
+            color={params.row.trackStock ? 'primary' : 'default'}
+            gradient={params.row.trackStock}
+            size="small"
+            variant={params.row.trackStock ? 'filled' : 'outlined'}
+          />
+        </Box>
+      )
+    },
+    {
+      field: 'actions',
+      headerName: 'İşlemler',
+      sortable: false,
+      filterable: false,
+      minWidth: 160,
+      flex: 0.8,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<Product>) => (
+        <Stack direction="row" spacing={1} justifyContent="center" alignItems="center" sx={{ width: '100%' }}>
+          <Tooltip title="Ürünü Düzenle" arrow>
+            <IconButton
+              size="small"
+              onClick={() => onEditProduct(params.row)}
+              sx={{
+                borderRadius: 2,
+                background: 'rgba(45, 104, 255, 0.1)',
+                color: '#2D68FF',
+                '&:hover': {
+                  background: 'rgba(45, 104, 255, 0.2)',
+                },
+              }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Ürünü Sil" arrow>
+            <IconButton
+              size="small"
+              onClick={() => handleDeleteProduct(params.row.id, params.row.name)}
+              sx={{
+                borderRadius: 2,
+                background: 'rgba(255, 82, 82, 0.1)',
+                color: '#FF5252',
+                '&:hover': {
+                  background: 'rgba(255, 82, 82, 0.2)',
+                },
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      )
+    },
+  ], [onEditProduct]);
 
   return (
     <Box>
@@ -254,9 +452,8 @@ function ProductList({ onEditProduct }: ProductListProps) {
           </Typography>
         </Box>
       </Stack>
-
-      {/* Products Table */}
-      <TableContainer sx={{
+      {/* Products DataGrid */}
+      <Box sx={{
         position: 'relative',
         zIndex: 1,
         borderRadius: 3,
@@ -264,251 +461,51 @@ function ProductList({ onEditProduct }: ProductListProps) {
         background: 'rgba(253, 253, 253, 0.8)',
         backdropFilter: 'blur(32px)',
         boxShadow: '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        height: 560
       }}>
-        <Table>
-          <TableHead sx={{
-            background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
-          }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Ürün Kodu
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Ürün Bilgileri
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Barkod
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Fiyat
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Birim
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Durum
-              </TableCell>
-              <TableCell sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                Stok Takibi
-              </TableCell>
-              <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.875rem', color: '#1B1B1B', py: 2 }}>
-                İşlemler
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <LoadingSkeleton />
-            ) : products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 8 }}>
-                  <Stack alignItems="center" spacing={2}>
-                    <Avatar sx={{ 
-                      width: 64, 
-                      height: 64, 
-                      background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
-                      color: '#2D68FF'
-                    }}>
-                      <InventoryIcon fontSize="large" />
-                    </Avatar>
-                    <Typography variant="h6" color="text.secondary" sx={{ fontWeight: 500 }}>
-                      {searchTerm || filterBy !== 'all' ? 'Arama kriterlerine uygun ürün bulunamadı' : 'Henüz ürün eklenmemiş'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {searchTerm || filterBy !== 'all' ? 'Farklı arama terimleri deneyin' : 'İlk ürününüzü eklemek için "Yeni Ürün Ekle" butonunu kullanın'}
-                    </Typography>
-                  </Stack>
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map((product, index) => {
-                return (
-                  <Fade in={true} timeout={300 + index * 50} key={product.id}>
-                    <TableRow 
-                      hover 
-                      sx={{ 
-                        '&:hover': { 
-                          background: 'rgba(247, 249, 255, 0.5)',
-                          transform: 'scale(1.001)',
-                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                        },
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                      }}
-                    >
-                    <TableCell sx={{ py: 2 }}>
-                      <Typography variant="body2" sx={{ 
-                        fontWeight: 600, 
-                        fontFamily: 'monospace',
-                        color: '#2D68FF',
-                        fontSize: '0.875rem'
-                      }}>
-                        {product.code}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <Stack direction="row" spacing={2} alignItems="center">
-                        <Box sx={{ position: 'relative' }}>
-                          <Avatar
-                            src={(product.image || (product as any).images?.[0] || undefined) as any}
-                            sx={{
-                              width: 48,
-                              height: 48,
-                              borderRadius: 2,
-                              background: (product.image || (product as any).images?.[0])
-                                ? 'transparent' 
-                                : 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)',
-                              border: '1.5px solid rgba(246, 246, 246, 1)',
-                            }}
-                          >
-                            {!(product.image || (product as any).images?.[0]) && <InventoryIcon color="primary" />}
-                          </Avatar>
-                          {Array.isArray((product as any).images) && (product as any).images.length > 1 && (
-                            <Box
-                              sx={{
-                                position: 'absolute',
-                                bottom: -4,
-                                right: -4,
-                                background: 'rgba(45, 104, 255, 0.9)',
-                                color: 'white',
-                                borderRadius: '10px',
-                                px: 0.75,
-                                py: 0.25,
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
-                              }}
-                            >
-                              {(product as any).images.length}
-                            </Box>
-                          )}
-                        </Box>
-                        <Stack spacing={0.5}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                            {product.name}
-                          </Typography>
-                          {product.description && (
-                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                              {product.description}
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Stack>
-                    </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <Typography variant="body2" sx={{ 
-                        fontFamily: 'monospace',
-                        color: product.barcode ? '#1B1B1B' : '#727272',
-                        fontSize: '0.875rem'
-                      }}>
-                        {product.barcode || '—'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right" sx={{ py: 2 }}>
-                      <Stack alignItems="flex-end" spacing={0.5}>
-                        <Stack direction="row" alignItems="center" spacing={0.5}>
-                          <PriceIcon fontSize="small" color="success" />
-                          <Typography variant="body2" sx={{ 
-                            fontWeight: 700, 
-                            color: '#00A656',
-                            fontSize: '0.875rem'
-                          }}>
-                            ₺{formatPrice(product.basePrice)}
-                          </Typography>
-                        </Stack>
-                      </Stack>
-                    </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <ModernChip
-                        label={getUnitLabel(product.unit)}
-                        size="small"
-                        sx={{ fontSize: '0.75rem' }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <ModernChip
-                        label={product.active ? 'Aktif' : 'Pasif'}
-                        color={product.active ? 'success' : 'default'}
-                        gradient={product.active}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell sx={{ py: 2 }}>
-                      <ModernChip
-                        label={product.trackStock ? 'Evet' : 'Hayır'}
-                        color={product.trackStock ? 'primary' : 'default'}
-                        gradient={product.trackStock}
-                        size="small"
-                        variant={product.trackStock ? 'filled' : 'outlined'}
-                      />
-                    </TableCell>
-                    <TableCell align="center" sx={{ py: 2 }}>
-                      <Stack direction="row" spacing={1} justifyContent="center">
-                        <Tooltip title="Ürünü Düzenle" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => onEditProduct(product)}
-                            sx={{
-                              borderRadius: 2,
-                              background: 'rgba(45, 104, 255, 0.1)',
-                              color: '#2D68FF',
-                              '&:hover': {
-                                background: 'rgba(45, 104, 255, 0.2)',
-                              },
-                            }}
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Ürünü Sil" arrow>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleDeleteProduct(product.id, product.name)}
-                            sx={{
-                              borderRadius: 2,
-                              background: 'rgba(255, 82, 82, 0.1)',
-                              color: '#FF5252',
-                              '&:hover': {
-                                background: 'rgba(255, 82, 82, 0.2)',
-                              },
-                            }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                    </TableCell>
-                    </TableRow>
-                  </Fade>
-                );
-              })
-            )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        {/* Pagination Controls */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 2 }}>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Sayfa Boyutu</InputLabel>
-            <Select
-              value={pageSize as any}
-              label="Sayfa Boyutu"
-              onChange={handlePageSizeChange}
-            >
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={20}>20</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-              <MenuItem value={100}>100</MenuItem>
-            </Select>
-          </FormControl>
-          <Pagination
-            count={Math.max(1, Math.ceil((pagination.total || 0) / pageSize))}
-            page={page}
-            onChange={handlePageChange}
-            color="primary"
-            shape="rounded"
-          />
-        </Stack>
+        <DataGrid
+          rows={products}
+          columns={columns}
+          getRowId={(row) => row.id}
+          rowCount={pagination.total}
+          loading={loading}
+          paginationMode="server"
+          sortingMode="server"
+          paginationModel={paginationModel}
+          onPaginationModelChange={handlePaginationModelChange}
+          sortModel={sortModel}
+          onSortModelChange={handleSortModelChange}
+          disableRowSelectionOnClick
+          disableColumnMenu
+          checkboxSelection={false}
+          showCellVerticalBorder={false}
+          showColumnVerticalBorder={false}
+          columnHeaderHeight={56}
+          getRowHeight={() => 64}
+          sx={{
+            '& .MuiDataGrid-columnHeaders': {
+              background: 'linear-gradient(180deg, rgba(253, 253, 253, 0.3) 0%, rgba(253, 253, 253, 1) 100%)',
+              fontWeight: 600,
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              color: '#1B1B1B',
+            },
+            '& .MuiDataGrid-cell': {
+              display: 'flex',
+              alignItems: 'center',
+              fontSize: '0.875rem',
+              color: '#1B1B1B',
+              py: 2,
+            },
+            '& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within': {
+              outline: 'none',
+            },
+          }}
+        />
+      </Box>
       </Box>
     );
   }
