@@ -17,6 +17,7 @@ import {
   MaterialReactTable,
   useMaterialReactTable,
   type MRT_ColumnDef,
+  type MRT_ColumnPinningState,
   type MRT_SortingState,
   type MRT_ColumnOrderState,
   type MRT_VisibilityState,
@@ -49,6 +50,11 @@ const LS_KEY_PREFIX = 'productList';
 const LS_ORDER = `${LS_KEY_PREFIX}.columnOrder`;
 const LS_VISIBILITY = `${LS_KEY_PREFIX}.columnVisibility`;
 const LS_SIZING = `${LS_KEY_PREFIX}.columnSizing`;
+const LS_SHOW_SEARCH = `${LS_KEY_PREFIX}.showSearch`;
+const LS_SEARCH = `${LS_KEY_PREFIX}.searchTerm`;
+const LS_SORT = `${LS_KEY_PREFIX}.sorting`;
+const LS_PAGE_SIZE = `${LS_KEY_PREFIX}.pageSize`;
+const LS_PINNING = `${LS_KEY_PREFIX}.columnPinning`;
 
 export interface ProductListMRTProps {
   onEditProduct?: (p: Product) => void;
@@ -59,10 +65,17 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   const { products, pagination, loading, fetchProducts } = useProductStore();
 
   // search & simple filter (opsiyonel - hızlı entegrasyon)
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem(LS_SEARCH) ?? '');
+  const [showSearch, setShowSearch] = useState<boolean>(() => {
+    const raw = localStorage.getItem(LS_SHOW_SEARCH);
+    return raw ? JSON.parse(raw) : true;
+  });
 
   // MRT controlled states + persistence
-  const [sorting, setSorting] = useState<MRT_SortingState>([]);
+  const [sorting, setSorting] = useState<MRT_SortingState>(() => {
+    const raw = localStorage.getItem(LS_SORT);
+    return raw ? (JSON.parse(raw) as MRT_SortingState) : [];
+  });
   const [columnOrder, setColumnOrder] = useState<MRT_ColumnOrderState>(() => {
     const raw = localStorage.getItem(LS_ORDER);
     return raw ? (JSON.parse(raw) as string[]) : [];
@@ -75,6 +88,10 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     const raw = localStorage.getItem(LS_SIZING);
     return raw ? (JSON.parse(raw) as Record<string, number>) : {};
   });
+  const [columnPinning, setColumnPinning] = useState<MRT_ColumnPinningState>(() => {
+    const raw = localStorage.getItem(LS_PINNING);
+    return raw ? (JSON.parse(raw) as MRT_ColumnPinningState) : {};
+  });
 
   useEffect(() => {
     localStorage.setItem(LS_ORDER, JSON.stringify(columnOrder));
@@ -85,6 +102,34 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   useEffect(() => {
     localStorage.setItem(LS_SIZING, JSON.stringify(columnSizing));
   }, [columnSizing]);
+  useEffect(() => {
+    localStorage.setItem(LS_PINNING, JSON.stringify(columnPinning));
+  }, [columnPinning]);
+  // persist search & visibility of search
+  useEffect(() => {
+    localStorage.setItem(LS_SEARCH, searchTerm);
+  }, [searchTerm]);
+  useEffect(() => {
+    localStorage.setItem(LS_SHOW_SEARCH, JSON.stringify(showSearch));
+  }, [showSearch]);
+  // persist sorting
+  useEffect(() => {
+    localStorage.setItem(LS_SORT, JSON.stringify(sorting));
+  }, [sorting]);
+
+  // İlk yüklemede kaydedilmiş pageSize varsa uygula
+  useEffect(() => {
+    const savedSizeRaw = localStorage.getItem(LS_PAGE_SIZE);
+    const savedSize = savedSizeRaw ? Number(savedSizeRaw) : undefined;
+    if (savedSize && savedSize !== pagination.pageSize) {
+      fetchProducts({
+        page: pagination.page,
+        pageSize: savedSize,
+        search: searchTerm || undefined,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // server-side fetch: map MRT sorting to backend sortBy/order (first rule only)
   useEffect(() => {
@@ -288,24 +333,39 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       sorting,
       columnOrder,
       columnVisibility,
+      columnPinning,
       columnSizing,
       pagination: { pageIndex: pagination.page - 1, pageSize: pagination.pageSize },
-      showGlobalFilter: true,
+      showGlobalFilter: showSearch,
       globalFilter: searchTerm,
     },
-    onSortingChange: setSorting,
+    onSortingChange: (newSorting) => {
+      setSorting(newSorting);
+      try { localStorage.setItem(LS_SORT, JSON.stringify(newSorting)); } catch {}
+    },
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnPinningChange: setColumnPinning,
     onColumnSizingChange: setColumnSizing,
     onPaginationChange: (updater) => {
-      // MRT v3 Updater<PaginationState> alır, doğrudan destrüktüre edilmez
       const current = { pageIndex: pagination.page - 1, pageSize: pagination.pageSize };
       const next = typeof updater === 'function' ? (updater as any)(current) : (updater as any);
+      if (next?.pageSize && next.pageSize !== current.pageSize) {
+        try { localStorage.setItem(LS_PAGE_SIZE, String(next.pageSize)); } catch {}
+      }
       fetchProducts({
         page: (next?.pageIndex ?? current.pageIndex) + 1,
         pageSize: next?.pageSize ?? current.pageSize,
         search: searchTerm || undefined,
       });
+    },
+    onGlobalFilterChange: (newSearchTerm) => {
+      setSearchTerm(newSearchTerm);
+      try { localStorage.setItem(LS_SEARCH, newSearchTerm); } catch {}
+    },
+    onShowGlobalFilterChange: (newShowSearch) => {
+      setShowSearch(newShowSearch);
+      try { localStorage.setItem(LS_SHOW_SEARCH, String(newShowSearch)); } catch {}
     },
 
     enableColumnOrdering: true,
@@ -325,8 +385,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     rowVirtualizerOptions: { overscan: 5 },
     columnVirtualizerOptions: { overscan: 2 },
 
-    // Global filter'ı backend ile senkronize et
-    onGlobalFilterChange: setSearchTerm,
+    // Global filter input props
     muiSearchTextFieldProps: {
       placeholder: 'Ara... (ad, kod, barkod)',
       variant: 'outlined',
@@ -343,11 +402,12 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       const isFs = table.getState().isFullScreen;
       return {
         sx: {
-          borderRadius: isFs ? 0 : 3,
-          border: isFs ? 'none' : '1.5px solid rgba(246, 246, 246, 1)',
-          background: isFs ? 'background.paper' : 'rgba(253, 253, 253, 0.8)',
-          backdropFilter: isFs ? 'none' : 'blur(32px)',
-          boxShadow: isFs ? 'none' : '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
+          // Normal modda sade: ek kart görünümü vermeyelim
+          borderRadius: isFs ? 0 : 1,
+          border: 'none',
+          background: 'background.paper',
+          backdropFilter: isFs ? 'none' : undefined,
+          boxShadow: 'none',
           overflowX: 'auto',
           overflowY: 'auto',
           maxWidth: '100%',

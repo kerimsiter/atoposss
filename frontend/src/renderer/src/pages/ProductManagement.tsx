@@ -9,14 +9,13 @@ import {
   Fade,
   Backdrop,
   CircularProgress,
-  Stack,
-  Divider
+  Stack
 } from '@mui/material';
 import { 
   Add as AddIcon, 
   Refresh as RefreshIcon,
   Inventory2Outlined as InventoryIcon,
-  CategoryOutlined as CategoryIcon
+  
 } from '@mui/icons-material';
 import { Product, useProductStore } from '../stores/useProductStore';
 import { useMetaStore } from '../stores/useMetaStore';
@@ -296,22 +295,10 @@ const ProductManagement: React.FC = () => {
               </Box>
             </ModernCard>
 
-            {/* Product List Section */}
-            <ModernCard sx={{ p: 0, overflow: 'hidden' }}>
-              <Box sx={{ p: 3, pb: 0 }}>
-                <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-                  <CategoryIcon color="primary" />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Ürün Listesi
-                  </Typography>
-                </Stack>
-                <Divider sx={{ mx: -3, mb: 0 }} />
-              </Box>
-              
-              <Box sx={{ p: 3 }}>
-                <ProductList onEditProduct={handleEditProduct} />
-              </Box>
-            </ModernCard>
+            {/* Product List - düz yerleşim, ekstra kart/kapsayıcı yok */}
+            <Box sx={{ mt: 2 }}>
+              <ProductList onEditProduct={handleEditProduct} />
+            </Box>
 
             {/* Product Form Dialog */}
             <Suspense 
