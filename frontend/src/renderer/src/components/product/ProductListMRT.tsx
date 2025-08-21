@@ -55,6 +55,7 @@ const LS_SEARCH = `${LS_KEY_PREFIX}.searchTerm`;
 const LS_SORT = `${LS_KEY_PREFIX}.sorting`;
 const LS_PAGE_SIZE = `${LS_KEY_PREFIX}.pageSize`;
 const LS_PINNING = `${LS_KEY_PREFIX}.columnPinning`;
+const LS_PAGE = `${LS_KEY_PREFIX}.page`;
 
 export interface ProductListMRTProps {
   onEditProduct?: (p: Product) => void;
@@ -65,7 +66,8 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   const { products, pagination, loading, fetchProducts } = useProductStore();
 
   // search & simple filter (opsiyonel - hızlı entegrasyon)
-  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem(LS_SEARCH) ?? '');
+  const [searchTerm, setSearchTerm] = useState<string>(() => localStorage.getItem(LS_SEARCH) || '');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>(searchTerm);
   const [showSearch, setShowSearch] = useState<boolean>(() => {
     const raw = localStorage.getItem(LS_SHOW_SEARCH);
     return raw ? JSON.parse(raw) : true;
@@ -109,6 +111,11 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   useEffect(() => {
     localStorage.setItem(LS_SEARCH, searchTerm);
   }, [searchTerm]);
+  // Debounce search to reduce server requests
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
   useEffect(() => {
     localStorage.setItem(LS_SHOW_SEARCH, JSON.stringify(showSearch));
   }, [showSearch]);
@@ -117,15 +124,17 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     localStorage.setItem(LS_SORT, JSON.stringify(sorting));
   }, [sorting]);
 
-  // İlk yüklemede kaydedilmiş pageSize varsa uygula
+  // İlk yüklemede kaydedilmiş pageSize ve page varsa uygula
   useEffect(() => {
     const savedSizeRaw = localStorage.getItem(LS_PAGE_SIZE);
     const savedSize = savedSizeRaw ? Number(savedSizeRaw) : undefined;
-    if (savedSize && savedSize !== pagination.pageSize) {
+    const savedPageRaw = localStorage.getItem(LS_PAGE);
+    const savedPage = savedPageRaw ? Number(savedPageRaw) : undefined;
+    if ((savedSize && savedSize !== pagination.pageSize) || (savedPage && savedPage !== pagination.page)) {
       fetchProducts({
-        page: pagination.page,
-        pageSize: savedSize,
-        search: searchTerm || undefined,
+        page: savedPage || pagination.page,
+        pageSize: savedSize || pagination.pageSize,
+        search: debouncedSearchTerm || undefined,
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,11 +150,11 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     fetchProducts({
       page: pagination.page,
       pageSize: pagination.pageSize,
-      search: searchTerm || undefined,
+      search: debouncedSearchTerm || undefined,
       sortBy,
       order,
     });
-  }, [fetchProducts, sorting, searchTerm, pagination.page, pagination.pageSize]);
+  }, [fetchProducts, sorting, debouncedSearchTerm, pagination.page, pagination.pageSize]);
 
   // Virtualizer ref (docs: Virtualized Example)
   const rowVirtualizerInstanceRef = useRef<MRT_RowVirtualizer>(null);
@@ -353,10 +362,13 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       if (next?.pageSize && next.pageSize !== current.pageSize) {
         try { localStorage.setItem(LS_PAGE_SIZE, String(next.pageSize)); } catch {}
       }
+      if (typeof next?.pageIndex === 'number' && (next.pageIndex + 1) !== pagination.page) {
+        try { localStorage.setItem(LS_PAGE, String(next.pageIndex + 1)); } catch {}
+      }
       fetchProducts({
         page: (next?.pageIndex ?? current.pageIndex) + 1,
         pageSize: next?.pageSize ?? current.pageSize,
-        search: searchTerm || undefined,
+        search: debouncedSearchTerm || undefined,
       });
     },
     onGlobalFilterChange: (newSearchTerm) => {
@@ -391,6 +403,18 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       variant: 'outlined',
       size: 'small',
     },
+
+    // Boş veri durumu için dostane geri bildirim
+    renderEmptyRowsFallback: () => (
+      <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+          Kayıt bulunamadı
+        </Typography>
+        <Typography variant="body2">
+          Filtreleri veya arama terimini değiştirerek tekrar deneyin.
+        </Typography>
+      </Box>
+    ),
 
     manualPagination: true,
     manualSorting: true,
