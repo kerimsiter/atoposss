@@ -6,13 +6,11 @@ import {
   Tooltip,
   IconButton,
   Avatar,
-  Button,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Inventory as InventoryIcon,
-  ViewColumn as ColumnsIcon,
 } from '@mui/icons-material';
 import {
   MaterialReactTable,
@@ -90,8 +88,10 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
   // server-side fetch: map MRT sorting to backend sortBy/order (first rule only)
   useEffect(() => {
     const sort = sorting[0];
-    const sortBy = sort?.id as any | undefined; // kolon id'si backend alanıyla aynı tutulmalı
-    const order = sort ? (sort.desc ? 'desc' : 'asc') : undefined;
+    const allowed = new Set(['name', 'code', 'barcode', 'basePrice', 'createdAt', 'updatedAt']);
+    const sortId = sort?.id as string | undefined;
+    const sortBy = sortId && allowed.has(sortId) ? (sortId as any) : undefined;
+    const order = sortBy ? (sort?.desc ? 'desc' : 'asc') : undefined;
     fetchProducts({
       page: pagination.page,
       pageSize: pagination.pageSize,
@@ -127,11 +127,10 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         ),
       },
       {
-        id: 'productInfo',
+        accessorKey: 'name',
         header: 'Ürün Bilgileri',
         enableColumnPinning: true,
-        size: columnSizing['productInfo'] ?? 280,
-        accessorFn: (row) => row.name,
+        size: columnSizing['name'] ?? 280,
         Cell: ({ row }) => {
           const p = row.original;
           const image = p.image || (Array.isArray(p.images) ? p.images[0] : '');
@@ -194,6 +193,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         accessorKey: 'unit',
         header: 'Birim',
         size: columnSizing['unit'] ?? 120,
+        enableSorting: false,
         Cell: ({ cell }) => (
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <ModernChip label={String(cell.getValue() || '')} size="small" sx={{ fontSize: '0.75rem' }} />
@@ -204,6 +204,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         accessorKey: 'active',
         header: 'Durum',
         size: columnSizing['active'] ?? 140,
+        enableSorting: false,
         Cell: ({ cell }) => (
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <ModernChip
@@ -219,6 +220,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         accessorKey: 'trackStock',
         header: 'Stok Takibi',
         size: columnSizing['trackStock'] ?? 160,
+        enableSorting: false,
         Cell: ({ cell }) => (
           <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
             <ModernChip
@@ -322,6 +324,15 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
         fontWeight: 600,
         fontSize: '0.875rem',
         color: '#1B1B1B',
+        borderRadius: 0,
+        '&:first-of-type': {
+          borderTopLeftRadius: 0,
+          borderBottomLeftRadius: 0,
+        },
+        '&:last-child': {
+          borderTopRightRadius: 0,
+          borderBottomRightRadius: 0,
+        },
       },
     },
     muiTableBodyCellProps: {
@@ -332,7 +343,7 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     },
 
     // Toolbar özelleştirme (mevcut UI ile uyumlu basit sürüm)
-    renderToolbarInternalActions: ({ table }) => (
+    renderToolbarInternalActions: () => (
       <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%', p: 1 }}>
         <ModernTextField
           placeholder="Ürün adı, kodu veya barkod ile ara..."
@@ -346,36 +357,6 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
           </Typography>
         </Box>
         <Box sx={{ flexGrow: 1 }} />
-        <Tooltip title="Kolonları Yönet" arrow>
-          <Button
-            size="small"
-            startIcon={<ColumnsIcon sx={{ fontSize: 18 }} />}
-            onClick={() => table.setShowColumnFilters(!table.getState().showColumnFilters)}
-            sx={{
-              textTransform: 'none',
-              borderRadius: 999,
-              px: 1.75,
-              py: 0.75,
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              bgcolor: 'rgba(45, 104, 255, 0.08)',
-              color: '#2D68FF',
-              border: '1px solid rgba(45, 104, 255, 0.25)',
-              boxShadow: '0 2px 6px rgba(45, 104, 255, 0.15)',
-              '&:hover': {
-                bgcolor: 'rgba(45, 104, 255, 0.16)',
-                borderColor: 'rgba(45, 104, 255, 0.35)',
-                boxShadow: '0 3px 10px rgba(45, 104, 255, 0.2)',
-              },
-              '&:active': {
-                bgcolor: 'rgba(45, 104, 255, 0.22)',
-              },
-              '& .MuiButton-startIcon': { mr: 1 },
-            }}
-          >
-            Kolonları Yönet
-          </Button>
-        </Tooltip>
       </Stack>
     ),
   });
