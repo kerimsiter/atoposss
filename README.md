@@ -1,3 +1,8 @@
+Okay, I have thoroughly reviewed the entire project codebase for both the backend (NestJS) and frontend (Electron-React-TypeScript). I will now update the `atoposss/README.md` file to reflect the current state of the project, including newly implemented features and refining the "Future Features" section accordingly.
+
+Here is the updated content for `atoposss/README.md`:
+
+```markdown
 # Modern Ürün Yönetim Sistemi
 
 Bu proje, NestJS backend ve Electron-React-TypeScript frontend ile geliştirilmiş modern bir Ürün Yönetim sistemidir. Bento Pro tasarım dilinden ilham alınarak, glassmorphism efektleri ve modern UI/UX prensipleri kullanılmıştır.
@@ -23,37 +28,37 @@ Bu proje, NestJS backend ve Electron-React-TypeScript frontend ile geliştirilmi
 
 ### Özellikler:
 - **Prisma Service**: Veritabanı bağlantı yönetimi ve ORM işlemleri
-- **Products Module**: Tam CRUD operasyonları (oluşturma, okuma, güncelleme, silme)
-- **DTOs**: `class-validator` ile güçlü ve otomatik veri doğrulama
+- **Products Module**: Tam CRUD operasyonları (oluşturma, okuma, güncelleme, soft-delete ile silme)
+- **DTOs**: `class-validator` ile güçlü ve otomatik veri doğrulama, gelişmiş nested DTO yapıları
 - **CORS Support**: Frontend entegrasyonu için yapılandırılmış (http://localhost:5173, http://localhost:3000)
 - **Global Validation**: Otomatik veri doğrulama pipeline'ı ile tutarlı giriş kontrolü
-- **Ürün Resmi Yükleme ve Servis**: `Multer` ve `Sharp` ile güvenli ve optimize edilmiş resim yükleme, statik dosya sunumu
+- **Ürün Resmi Yükleme ve Servis**: `Multer` ve `Sharp` ile güvenli ve optimize edilmiş resim yükleme (yeniden boyutlandırma, WebP'ye dönüştürme), statik dosya sunumu
 
 ### REST API Endpoints:
 - `POST /products` - Yeni ürün oluştur
-- `GET /products` - Tüm ürünleri getir
+- `GET /products` - Tüm ürünleri getir (filtreleme, sıralama ve sayfalama destekli)
 - `GET /products/:id` - Belirli ürünü getir
-- `PATCH /products/:id` - Ürün bilgilerini güncelle
-- `DELETE /products/:id` - Ürünü soft-delete ile sil
+- `PATCH /products/:id` - Ürün bilgilerini güncelle (varyant ve ek seçeneklerin akıllı mergelaması dahil)
+- `DELETE /products/:id` - Ürünü soft-delete ile sil (veritabanından kalıcı olarak silmez)
 - `GET /products/meta/companies` - Tanımlı şirketleri getir
 - `GET /products/meta/categories` - Ürün kategorilerini getir (isteğe bağlı `companyId` filtresi ile)
 - `GET /products/meta/taxes` - Vergi oranlarını getir (isteğe bağlı `companyId` filtresi ile)
 - `GET /products/meta/modifier-groups` - Mevcut ek seçenek gruplarını ve seçeneklerini getir
-- `GET /products/check-code-uniqueness/:code/:companyId` - Ürün kodunun şirkete özel benzersizliğini kontrol et
-- `POST /upload/product-image` - Ürün resmi yükle (WebP'ye dönüştürülür ve yeniden boyutlandırılır)
+- `GET /products/check-code-uniqueness?code={code}&companyId={companyId}&currentProductId={currentProductId?}` - Ürün kodunun şirket bazında benzersizliğini kontrol et (güncelleme durumunda mevcut ürünü hariç tutabilir)
+- `GET /products/stats?companyId={companyId?}` - Ürün istatistiklerini getir (toplam, aktif, stok takipli)
+- `POST /upload/product-image` - Ürün resmi yükle (otomatik olarak 800px genişliğe yeniden boyutlandırılır ve WebP formatına dönüştürülür, kalite %80)
 - `GET /uploads/products/:filename` - Yüklenen ürün resmini getir
 
 ### Backend Yapısı:
 
-Copy
-
+```
 backend/
 ├── src/
 │   ├── prisma/
-│   │   └── prisma.service.ts
+│   │   └── prisma.service.ts          # Veritabanı bağlantı yönetimi ve ORM işlemleri
 │   ├── products/
 │   │   ├── dto/
-│   │   │   ├── create-product.dto.ts  # Ürün oluşturma DTO'su (varyant ve ek seçenekler dahil)
+│   │   │   ├── create-product.dto.ts  # Ürün oluşturma DTO'su (varyant, ek seçenekler, alerjenler dahil)
 │   │   │   └── update-product.dto.ts  # Ürün güncelleme DTO'su (kısmi güncelleme ve varyant/ek seçenek mergelaması)
 │   │   ├── products.controller.ts     # Ürün API uç noktaları ve meta data endpointleri
 │   │   ├── products.service.ts        # Ürün iş mantığı, veritabanı etkileşimleri, benzersizlik kontrolü, nested işlemler
@@ -62,11 +67,11 @@ backend/
 │   │   ├── upload.controller.ts       # Dosya yükleme API uç noktaları
 │   │   └── upload.service.ts          # Resim işleme ve kaydetme mantığı (Sharp entegrasyonu)
 │   ├── app.module.ts
-│   └── main.ts (CORS + Validation + Static Assets)
+│   └── main.ts                        # Ana uygulama girişi (CORS, Global Validation, Statik Dosya Sunumu)
 └── prisma/
     ├── schema.prisma                  # Veritabanı şeması ve model tanımları
     └── seed.ts                        # Başlangıç verileri oluşturma (şirket, kategoriler, vergiler)
-
+```
 
 ## 🎨 Frontend Implementation ✅
 
@@ -75,21 +80,21 @@ backend/
 - **ModernCard**: Glassmorphism efektli ve yumuşak gölgeli kartlar
 - **ModernTextField**: Modern input alanları (glassmorphism arkaplanlı)
 - **ModernChip**: Gradient ve düz renk seçenekli chip bileşenleri
-- **ModernImageUpload**: Figma tasarımından ilham alan sürükle-bırak destekli resim yükleme bileşeni (önizleme, ilerleme çubuğu, validasyon)
+- **ModernImageUpload**: Figma tasarımından ilham alan sürükle-bırak destekli resim yükleme bileşeni (önizleme, ilerleme çubuğu, validasyon, ana görsel seçimi, çoklu görsel desteği)
 
 ### Özellikler:
 - **Zustand State Management**: Ürünler ve meta veriler için hafif ve hızlı global state yönetimi
 - **React Hook Form & Zod**: Form yönetimi ve güçlü şema tabanlı validasyon
+- **Material-React-Table**: Gelişmiş tablo özellikleri (sayfalama, sıralama, filtreleme, sütun yönetimi, lokal depolama ile durum kalıcılığı, sanallaştırma)
 - **Modern Theme**: Inter font ailesi, özel gölgeler ve gradient arkaplanlar ile Bento Pro esintili tema
-- **Responsive Design**: Tüm cihazlara uyumlu esnek arayüz
+- **Responsive Design**: Tüm ekran boyutlarına uyumlu esnek arayüz
 - **Smooth Animations**: Fade, hover ve transform gibi akıcı animasyonlar
 - **Loading States**: Veri yüklenirken iskelet ekranlar ve backdrop loading (dairesel ilerleme)
 - **Error Handling**: Modern alert ve snackbar bileşenleriyle kullanıcı dostu hata mesajları
 
 ### Frontend Yapısı:
 
-Copy
-
+```
 frontend/src/renderer/src/
 ├── theme/
 │   └── modernTheme.ts             # Material-UI için özel tema tanımları
@@ -102,6 +107,7 @@ frontend/src/renderer/src/
 │   │   └── ModernImageUpload.tsx  # Resim yükleme bileşeni
 │   ├── product/
 │   │   ├── ProductList.tsx         # Ürünleri listeleyen tablo bileşeni
+│   │   ├── ProductListMRT.tsx      # Material-React-Table tabanlı ürün listesi
 │   │   ├── ProductForm.tsx         # Ürün ekleme/düzenleme formu (çok sekmeli)
 │   │   ├── ProductFormBasicInfo.tsx
 │   │   ├── ProductFormPricing.tsx
@@ -117,38 +123,42 @@ frontend/src/renderer/src/
 ├── pages/
 │   └── ProductManagement.tsx      # Ürün yönetimi ana sayfası
 ├── validation/
-│   └── productSchemas.ts          # Zod ile form validasyon şemaları ve özel validasyonlar (ürün kodu benzersizliği)
+│   └── productSchemas.ts          # Zod ile form validasyon şemaları ve özel validasyonlar (ürün kodu benzersizliği, varyant SKU benzersizliği)
 └── App.tsx                        # Ana uygulama bileşeni ve router
-
+```
 
 ### Ana Özellikler:
 
-1.  **Modern Product List**:
+1.  **Modern Ürün Listesi**:
     -   Glassmorphism tablo tasarımı
-    -   Gelişmiş arama ve filtreleme (ürün adı, kodu, barkod, aktif/pasif, stok takipli)
-    -   Satır üzerine gelindiğinde (hover) efektleri ve animasyonlar
-    -   Duyarlı (responsive) tasarım
-    -   Veri yüklenirken iskelet (skeleton) ekran gösterimi
+    -   Gelişmiş arama (ad, kod, barkod) ve filtreleme (aktif/pasif, stok takipli, kategori, şirket)
+    -   Sunucu taraflı sayfalama ve sıralama
+    -   Sütun yeniden sıralama, boyutlandırma, görünürlük ve sabitleme gibi özelleştirilebilir tablo sütunları
+    -   Sütun ve satır sanallaştırma ile yüksek performans
+    -   Satır üzerine gelindiğinde (hover) efektleri ve akıcı animasyonlar
+    -   Kullanıcı tercihleri (sütun düzeni, arama terimi, sayfa boyutu vb.) tarayıcı depolamasında kalıcı olarak saklanır
+    -   Ürün görselleri için Avatar önizlemeleri
+    -   Veri yüklenirken yüklenme durumları (loading indicators)
 
-2.  **Modern Product Form**:
-    -   **Multi-step form tasarımı**: Genel, varyantlar, ek seçenekler ve alerjenler sekmeleri
-    -   **Glassmorphism dialog**: Şeffaf ve blur efekli şık form penceresi
-    -   **Real-time validation**: `react-hook-form` ve `Zod` ile anlık veri doğrulama ve kullanıcıya geri bildirim
-    -   **Smooth animations**: Form geçişleri ve etkileşimleri akıcıdır
-    -   **Icon-based sections**: Her form bölümü ilgili bir ikonla belirtilmiştir
-    -   **Drag & drop image upload**: Figma esintili, kullanıcı dostu resim yükleme arayüzü
+2.  **Modern Ürün Formu**:
+    -   **Çok sekmeli form tasarımı**: "Genel", "Varyantlar", "Ek Seçenekler" ve "Alerjenler" sekmeleri
+    -   **Glassmorphism dialog**: Şeffaf ve blur efektli şık form penceresi
+    -   **Gerçek zamanlı ve şema tabanlı validasyon**: `React Hook Form` ve `Zod` ile anlık veri doğrulama ve kullanıcıya geri bildirim; özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü
+    -   **Akıcı animasyonlar**: Form geçişleri ve etkileşimleri akıcıdır
+    -   **İkon tabanlı bölümler**: Her form bölümü ilgili bir ikonla belirtilmiştir
+    -   **Ürün Resmi Yükleme Sistemi**: Figma tasarımından ilham alan, sürükle-bırak destekli, ilerleme çubuğu ve anlık önizleme özellikli kullanıcı dostu resim yükleme arayüzü; çoklu görsel yükleme ve ana görsel seçimi imkanı
 
-3.  **Dashboard Stats**:
+3.  **Dashboard İstatistikleri**:
     -   Toplam ürün sayısı
     -   Aktif ürün sayısı
     -   Stok takipli ürün sayısı
     -   Gradient arkaplanlı şık stat kartları
 
-4.  **Modern Theme**:
-    -   **Inter font family**: Modern ve okunaklı tipografi
-    -   **Custom shadows**: Material-UI'nin varsayılan gölgelerinden daha yumuşak ve katmanlı gölgeler
-    -   **Gradient backgrounds**: Uygulama genelinde ve bazı bileşenlerde kullanılan yumuşak gradient geçişler
-    -   **Glassmorphism effects**: Uygulamanın genel görsel kimliğini oluşturan şeffaf ve blur efekli elemanlar
+4.  **Modern Tema**:
+    -   **Inter font ailesi**: Modern ve okunaklı tipografi
+    -   **Özel gölgeler**: Material-UI'nin varsayılan gölgelerinden daha yumuşak ve katmanlı gölgeler
+    -   **Gradient arkaplanlar**: Uygulama genelinde ve bazı bileşenlerde kullanılan yumuşak gradient geçişler
+    -   **Glassmorphism efektleri**: Uygulamanın genel görsel kimliğini oluşturan şeffaf ve blur efektli elemanlar
 
 ## 🛠️ Kurulum ve Çalıştırma
 
@@ -159,75 +169,47 @@ frontend/src/renderer/src/
 
 ### Backend Kurulumu:
 1.  Backend dizinine gidin:
-    
-
-Copy
+    ```bash
     cd backend
-    
-
+    ```
 2.  Bağımlılıkları yükleyin:
-    
-
-Copy
+    ```bash
     npm install
-    
-
+    ```
 3.  `.env` dosyasını yapılandırın. `DATABASE_URL`'i PostgreSQL bağlantı dizginizle güncelleyin:
-    
-
-Copy
-
+    ```
     DATABASE_URL="postgresql://username:password@localhost:5432/dbname?schema=public"
-    
-
+    ```
     *Örnek:* `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/atropos_pos_db?schema=public"`
 4.  Prisma migrasyonlarını uygulayın ve Prisma Client'ı generate edin:
-    
-
-Copy
+    ```bash
     npx prisma migrate dev --name init # İlk migrasyon için
     npx prisma generate
-    
-
+    ```
 5.  Veritabanına başlangıç verilerini ekleyin (isteğe bağlı):
-    
-
-Copy
+    ```bash
     npm run db:seed
-    
-
+    ```
 6.  Backend sunucusunu başlatın:
-    
-
-Copy
+    ```bash
     npm run start:dev
-    
-
+    ```
     (Sunucu `http://localhost:3000` adresinde çalışacaktır.)
 
 ### Frontend Kurulumu:
 1.  Frontend dizinine gidin (yeni bir terminalde):
-    
-
-Copy
+    ```bash
     cd frontend
-    
-
+    ```
 2.  Bağımlılıkları yükleyin:
-    
-
-Copy
+    ```bash
     npm install
-    
-
+    ```
     (Inter font kurulumu otomatik olarak yapılacaktır.)
 3.  Electron uygulamasını geliştirme modunda başlatın:
-    
-
-Copy
+    ```bash
     npm run dev
-    
-
+    ```
     (Uygulama `http://localhost:5173` adresine bağlanacaktır.)
 
 ## 🔧 API Entegrasyonu
@@ -257,39 +239,26 @@ Frontend, `http://localhost:3000` adresindeki backend API'sine `axios` kütüpha
 -   **Styled Components** - Material-UI'nin styling motoru olarak (Electron Vite yapılandırması)
 -   **Inter Font** - Modern ve profesyonel tipografi
 -   **Glassmorphism** - Modern UI efektleri için özel CSS ve Material-UI styling'i
+-   **Material-React-Table** - Gelişmiş veri tabloları için esnek ve performanslı kütüphane
 
 ## ✅ **Yeni Eklenen Özellikler**
 
-### **Ürün Resmi Yükleme Sistemi (Frontend)**
--   **Drag & Drop Upload**: Figma tasarımından ilham alınmış modern sürükle-bırak arayüzü
--   **File Validation**: Dosya türü (JPEG, PNG, WebP) ve boyut (maks. 5MB) kontrolü
--   **Progress Indicator**: Yükleme sırasında gerçek zamanlı ilerleme çubuğu
--   **Preview System**: Yüklenen resimlerin anında önizlemesi
--   **Error Handling**: Kullanıcı dostu hata mesajları
--   **Responsive Design**: Tüm cihazlarda uyumlu arayüz
-
-### **Backend File Upload**
--   **Multer Integration**: Güvenli ve verimli dosya yükleme middleware'i
--   **File Validation**: MIME türü ve boyut kontrolü
--   **Static File Serving**: Yüklenen resimlerin otomatik olarak statik URL'ler üzerinden sunumu
--   **Unique Filenames**: Çakışmaları önlemek için timestamp ve rastgele dize tabanlı benzersiz dosya adlandırma
--   **Sharp Image Processing**: Yüklenen resimleri otomatik olarak 800px genişliğe yeniden boyutlandırma ve WebP formatına dönüştürme (kalite 80)
-
-### **Gelişmiş Ürün Formu Alanları**
--   **Ürün Varyantları Yönetimi**: Ürünler için birden fazla varyant (boyut, renk vb.) tanımlama, güncelleme ve silme imkanı (`sku`, `fiyat` alanları ile)
--   **Ek Seçenek Grupları ve Seçenekleri Yönetimi**: Ürünlere eklenebilecek ek seçenek grupları (ör: "İçecek Boyutu") ve her grubun altında seçenekler (ör: "Küçük", "Orta", "Büyük") tanımlama. Mevcut ek seçenek gruplarını ekleyebilme.
--   **Alerjen Bilgileri**: Ürünlere alerjen etiketleri (Gluten, Süt vb.) ekleyebilme, önerilerle veya manuel girişle.
--   **Gelişmiş Form Validasyonları**: `React Hook Form` ve `Zod` kullanarak karmaşık nested form alanları için anlık ve şema tabanlı validasyon. Özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü.
+-   **Kapsamlı Ürün Formu Alanları**: Ürünler için varyantlar (boyut, renk vb.), ek seçenek grupları (min/maks seçim kısıtlamaları ve mevcut grupları ekleyebilme), ve alerjen bilgileri (önerilerle) yönetimi.
+-   **Gelişmiş Form Validasyonları**: `React Hook Form` ve `Zod` kullanarak karmaşık iç içe form alanları için anlık ve şema tabanlı validasyon. Özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü (hem frontend hem backend tarafında).
+-   **Modern Ürün Görseli Yükleme Sistemi**: Figma tasarımından esinlenilmiş, sürükle-bırak özellikli, yükleme ilerlemesi gösteren, anlık önizlemeler sunan ve birden fazla görsel yükleme ile ana görsel seçimi yapma imkanı tanıyan kullanıcı dostu arayüz. Yüklenen görseller backend tarafından otomatik olarak optimize edilir (yeniden boyutlandırma ve WebP dönüşümü).
+-   **Detaylı Ürün Listesi Yönetimi**: Material-React-Table entegrasyonu ile gelişmiş arama, filtreleme, sunucu tabanlı sıralama ve sayfalama, sütun özelleştirme (yeniden sıralama, boyutlandırma, görünürlük, sabitleme) ve kullanıcı ayarlarını kalıcı depolama özellikleri. Yüksek performans için satır ve sütun sanallaştırma desteği.
+-   **Soft Delete**: Ürünler ve birçok ana veri modeli için kalıcı silme yerine `deletedAt` alanı ile soft delete mekanizması.
+-   **Anlık İstatistik Kartları**: Ürün yönetimi ana sayfasında toplam ürün, aktif ürün ve stok takipli ürün sayılarını gösteren şık dashboard istatistik kartları.
 
 ## 🎯 Gelecek Özellikler
 
--   Kategori ve Vergi yönetimi için özel UI sayfaları
--   Çoklu resim desteği (ürün galerisi)
--   Resim optimizasyonu için daha detaylı ayarlar (kalite, format seçenekleri)
--   Toplu ürün işlemleri (silme, pasifleştirme vb.)
+-   Kategori ve Vergi yönetimi için özel UI sayfaları (Şu an sadece ürün formu içinde seçilebilir durumda)
+-   Görsel galerisi yönetimi (yüklenen görsellerin sıralanması, etiketlenmesi veya farklı ürün görselleri arasında geçiş yapma gibi daha gelişmiş özellikler)
+-   Resim optimizasyonu için kullanıcı tarafından yapılandırılabilir daha detaylı ayarlar (kalite, format seçenekleri)
+-   Toplu ürün işlemleri (toplu silme, toplu aktif/pasif yapma vb.)
 -   Ürünleri dışa aktarma/içe aktarma fonksiyonları
--   Gelişmiş filtreleme ve sıralama seçenekleri (fiyat aralığı, kategori, aktiflik)
--   Ürün varyantları ve modifikatörler için stok takibi entegrasyonu
+-   Ürün varyantları ve modifikatörler için gerçek stok takibi entegrasyonu (şu an sadece 'affectsStock' alanı mevcut)
+-   Fiyat aralığına göre filtreleme gibi daha spesifik filtreleme seçenekleri
 -   Dark mode desteği
 -   Çoklu dil desteği
 
@@ -314,3 +283,4 @@ Sistem production kullanımına hazırdır. Ek özellikler:
 -   Type safety ✅
 
 ---
+```
