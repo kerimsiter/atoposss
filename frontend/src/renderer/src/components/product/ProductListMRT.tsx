@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Stack,
@@ -6,6 +6,7 @@ import {
   Tooltip,
   IconButton,
   Avatar,
+  Portal,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -20,9 +21,9 @@ import {
   type MRT_ColumnOrderState,
   type MRT_VisibilityState,
   type MRT_ColumnSizingState,
+  type MRT_RowVirtualizer,
 } from 'material-react-table';
 import { MRT_Localization_TR } from 'material-react-table/locales/tr';
-import ModernTextField from '../ui/ModernTextField';
 import ModernChip from '../ui/ModernChip';
 import { useProductStore, type Product } from '../../stores/useProductStore';
 
@@ -100,6 +101,18 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       order,
     });
   }, [fetchProducts, sorting, searchTerm, pagination.page, pagination.pageSize]);
+
+  // Virtualizer ref (docs: Virtualized Example)
+  const rowVirtualizerInstanceRef = useRef<MRT_RowVirtualizer>(null);
+
+  // Sıralama değiştiğinde en üste scroll (docs önerisi)
+  useEffect(() => {
+    try {
+      rowVirtualizerInstanceRef.current?.scrollToIndex?.(0);
+    } catch {
+      // ignore
+    }
+  }, [sorting]);
 
   const columns = useMemo<MRT_ColumnDef<Product>[]>(
     () => [
@@ -277,7 +290,8 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       columnVisibility,
       columnSizing,
       pagination: { pageIndex: pagination.page - 1, pageSize: pagination.pageSize },
-      showGlobalFilter: false,
+      showGlobalFilter: true,
+      globalFilter: searchTerm,
     },
     onSortingChange: setSorting,
     onColumnOrderChange: setColumnOrder,
@@ -298,25 +312,76 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
     enableColumnResizing: true,
     enableColumnPinning: true,
     enableStickyHeader: true,
+    enableGlobalFilter: true,
+    enableColumnFilters: true,
+    enableDensityToggle: true,
+    enableFullScreenToggle: true,
+    enableHiding: false,
+
+    // Virtualization (docs example)
+    enableRowVirtualization: true,
+    enableColumnVirtualization: true,
+    rowVirtualizerInstanceRef,
+    rowVirtualizerOptions: { overscan: 5 },
+    columnVirtualizerOptions: { overscan: 2 },
+
+    // Global filter'ı backend ile senkronize et
+    onGlobalFilterChange: setSearchTerm,
+    muiSearchTextFieldProps: {
+      placeholder: 'Ara... (ad, kod, barkod)',
+      variant: 'outlined',
+      size: 'small',
+    },
 
     manualPagination: true,
     manualSorting: true,
 
     rowCount: pagination.total,
 
-    // Stil ve container
-    muiTableContainerProps: {
-      sx: {
-        borderRadius: 3,
-        border: '1.5px solid rgba(246, 246, 246, 1)',
-        background: 'rgba(253, 253, 253, 0.8)',
-        backdropFilter: 'blur(32px)',
-        boxShadow: '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
-        // Küçük ekranlarda sağa kaydırma için yatay scroll aç
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        maxWidth: '100%',
-      },
+    // Stil ve container (full-screen'de sade: tamamen dolsun ve kaydırılsın)
+    muiTableContainerProps: ({ table }) => {
+      const isFs = table.getState().isFullScreen;
+      return {
+        sx: {
+          borderRadius: isFs ? 0 : 3,
+          border: isFs ? 'none' : '1.5px solid rgba(246, 246, 246, 1)',
+          background: isFs ? 'background.paper' : 'rgba(253, 253, 253, 0.8)',
+          backdropFilter: isFs ? 'none' : 'blur(32px)',
+          boxShadow: isFs ? 'none' : '0px 1px 8px -4px rgba(0, 0, 0, 0.2)',
+          overflowX: 'auto',
+          overflowY: 'auto',
+          maxWidth: '100%',
+          // Full-screen'de MRT Paper zaten tüm viewport'u kaplıyor; Container dolu yükseklikte olmalı
+          maxHeight: isFs ? '100%' : '60vh',
+          height: isFs ? '100%' : undefined,
+        },
+      };
+    },
+    // Full screen: global theme'deki Paper blur'unu kesin olarak iptal et ve gerçekten viewport'a sabitle
+    muiTablePaperProps: ({ table }) => {
+      const isFs = table.getState().isFullScreen;
+      return {
+        style: { zIndex: isFs ? 9999 : undefined },
+        sx: {
+          backdropFilter: isFs ? 'none !important' : undefined,
+          background: isFs ? 'background.paper !important' : undefined,
+          borderRadius: isFs ? '0 !important' : undefined,
+          border: isFs ? 'none !important' : undefined,
+          // Tam ekranın gerçekten ekranı kaplaması için konumlandırma
+          position: isFs ? 'fixed' : undefined,
+          top: isFs ? 0 : undefined,
+          right: isFs ? 0 : undefined,
+          bottom: isFs ? 0 : undefined,
+          left: isFs ? 0 : undefined,
+          width: isFs ? '100vw' : undefined,
+          height: isFs ? '100vh' : undefined,
+          maxWidth: isFs ? '100vw' : undefined,
+          maxHeight: isFs ? '100vh' : undefined,
+          margin: isFs ? 0 : undefined,
+          padding: isFs ? 0 : undefined,
+          boxShadow: isFs ? 'none' : undefined,
+        },
+      };
     },
     muiTableHeadCellProps: {
       sx: {
@@ -342,26 +407,17 @@ const ProductListMRT: React.FC<ProductListMRTProps> = ({ onEditProduct, onDelete
       },
     },
 
-    // Toolbar özelleştirme (mevcut UI ile uyumlu basit sürüm)
-    renderToolbarInternalActions: () => (
-      <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%', p: 1 }}>
-        <ModernTextField
-          placeholder="Ürün adı, kodu veya barkod ile ara..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="small"
-        />
-        <Box sx={{ px: 2, py: 1, borderRadius: 2, background: 'linear-gradient(135deg, rgba(45, 104, 255, 0.1) 0%, rgba(119, 157, 255, 0.05) 100%)', border: '1px solid rgba(45, 104, 255, 0.2)' }}>
-          <Typography variant="body2" sx={{ fontWeight: 500, color: '#2D68FF' }}>
-            Toplam {pagination.total} kayıt
-          </Typography>
-        </Box>
-        <Box sx={{ flexGrow: 1 }} />
-      </Stack>
-    ),
+    // Varsayılan toolbar ikonları (arama, filtre, yoğunluk, tam ekran) etkin
   });
 
-  return <MaterialReactTable table={table} />;
+  const isFs = table.getState().isFullScreen;
+  return isFs ? (
+    <Portal container={document.body}>
+      <MaterialReactTable table={table} />
+    </Portal>
+  ) : (
+    <MaterialReactTable table={table} />
+  );
 };
 
 export default ProductListMRT;
