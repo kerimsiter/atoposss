@@ -1,8 +1,6 @@
-Okay, I have thoroughly reviewed the entire project codebase for both the backend (NestJS) and frontend (Electron-React-TypeScript). I will now update the `atoposss/README.md` file to reflect the current state of the project, including newly implemented features and refining the "Future Features" section accordingly.
+`atoposss/README.md` has been updated to reflect the current state of the codebase, ensuring accuracy and providing fresh details based on the project files.
 
-Here is the updated content for `atoposss/README.md`:
-
-```markdown
+```
 # Modern Ürün Yönetim Sistemi
 
 Bu proje, NestJS backend ve Electron-React-TypeScript frontend ile geliştirilmiş modern bir Ürün Yönetim sistemidir. Bento Pro tasarım dilinden ilham alınarak, glassmorphism efektleri ve modern UI/UX prensipleri kullanılmıştır.
@@ -32,14 +30,14 @@ Bu proje, NestJS backend ve Electron-React-TypeScript frontend ile geliştirilmi
 - **DTOs**: `class-validator` ile güçlü ve otomatik veri doğrulama, gelişmiş nested DTO yapıları
 - **CORS Support**: Frontend entegrasyonu için yapılandırılmış (http://localhost:5173, http://localhost:3000)
 - **Global Validation**: Otomatik veri doğrulama pipeline'ı ile tutarlı giriş kontrolü
-- **Ürün Resmi Yükleme ve Servis**: `Multer` ve `Sharp` ile güvenli ve optimize edilmiş resim yükleme (yeniden boyutlandırma, WebP'ye dönüştürme), statik dosya sunumu
+- **Ürün Resmi Yükleme ve Servis**: `Multer` ve `Sharp` ile güvenli ve optimize edilmiş resim yükleme (gelen görseller otomatik olarak 800px genişliğe yeniden boyutlandırılır ve kalite %80 ile WebP formatına dönüştürülür), statik dosya sunumu
 
 ### REST API Endpoints:
 - `POST /products` - Yeni ürün oluştur
 - `GET /products` - Tüm ürünleri getir (filtreleme, sıralama ve sayfalama destekli)
 - `GET /products/:id` - Belirli ürünü getir
 - `PATCH /products/:id` - Ürün bilgilerini güncelle (varyant ve ek seçeneklerin akıllı mergelaması dahil)
-- `DELETE /products/:id` - Ürünü soft-delete ile sil (veritabanından kalıcı olarak silmez)
+- `DELETE /products/:id` - Ürünü soft-delete ile sil (veritabanından kalıcı olarak silmez, `deletedAt` alanı güncellenir)
 - `GET /products/meta/companies` - Tanımlı şirketleri getir
 - `GET /products/meta/categories` - Ürün kategorilerini getir (isteğe bağlı `companyId` filtresi ile)
 - `GET /products/meta/taxes` - Vergi oranlarını getir (isteğe bağlı `companyId` filtresi ile)
@@ -143,15 +141,16 @@ frontend/src/renderer/src/
 2.  **Modern Ürün Formu**:
     -   **Çok sekmeli form tasarımı**: "Genel", "Varyantlar", "Ek Seçenekler" ve "Alerjenler" sekmeleri
     -   **Glassmorphism dialog**: Şeffaf ve blur efektli şık form penceresi
-    -   **Gerçek zamanlı ve şema tabanlı validasyon**: `React Hook Form` ve `Zod` ile anlık veri doğrulama ve kullanıcıya geri bildirim; özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü
+    -   **Gerçek zamanlı ve şema tabanlı validasyon**: `React Hook Form` ve `Zod` ile anlık veri doğrulama ve kullanıcıya geri bildirim. Özellikle `Zod`'un `superRefine` özelliği sayesinde, ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü hem frontend hem de backend (API çağrısı ile) entegre edilmiştir.
     -   **Akıcı animasyonlar**: Form geçişleri ve etkileşimleri akıcıdır
     -   **İkon tabanlı bölümler**: Her form bölümü ilgili bir ikonla belirtilmiştir
-    -   **Ürün Resmi Yükleme Sistemi**: Figma tasarımından ilham alan, sürükle-bırak destekli, ilerleme çubuğu ve anlık önizleme özellikli kullanıcı dostu resim yükleme arayüzü; çoklu görsel yükleme ve ana görsel seçimi imkanı
+    -   **Ürün Resmi Yükleme Sistemi**: Figma tasarımından ilham alan, sürükle-bırak destekli, yükleme ilerlemesi gösteren, anlık önizlemeler sunan ve birden fazla görsel yükleme ile ana görsel seçimi yapma imkanı tanıyan kullanıcı dostu arayüz.
 
 3.  **Dashboard İstatistikleri**:
     -   Toplam ürün sayısı
     -   Aktif ürün sayısı
     -   Stok takipli ürün sayısı
+    -   Şirket bazında filtrelenebilir anlık istatistikler
     -   Gradient arkaplanlı şık stat kartları
 
 4.  **Modern Tema**:
@@ -183,10 +182,10 @@ frontend/src/renderer/src/
     *Örnek:* `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/atropos_pos_db?schema=public"`
 4.  Prisma migrasyonlarını uygulayın ve Prisma Client'ı generate edin:
     ```bash
-    npx prisma migrate dev --name init # İlk migrasyon için
+    npx prisma migrate dev --name init # İlk migrasyon için, eğer daha önce hiç migrasyon yapılmadıysa
     npx prisma generate
     ```
-5.  Veritabanına başlangıç verilerini ekleyin (isteğe bağlı):
+5.  Veritabanına başlangıç verilerini ekleyin (isteğe bağlı, test şirket ve kategoriler oluşturur):
     ```bash
     npm run db:seed
     ```
@@ -231,7 +230,7 @@ Frontend, `http://localhost:3000` adresindeki backend API'sine `axios` kütüpha
 -   **Electron** - Cross-platform masaüstü uygulama geliştirme framework'ü
 -   **React 19** - Modern ve bileşen tabanlı UI kütüphanesi
 -   **TypeScript** - Frontend için type safety
--   **Material UI v7** - Kullanıma hazır ve özelleştirilebilir UI bileşen kütüphanesi
+-   **Material UI components** - Kullanıma hazır ve özelleştirilebilir UI bileşen kütüphanesi
 -   **Zustand** - Hafif ve esnek global state yönetimi
 -   **React Hook Form** - Form yönetimi ve validasyon çözümü
 -   **Zod** - Şema tabanlı veri doğrulama kütüphanesi
@@ -244,11 +243,11 @@ Frontend, `http://localhost:3000` adresindeki backend API'sine `axios` kütüpha
 ## ✅ **Yeni Eklenen Özellikler**
 
 -   **Kapsamlı Ürün Formu Alanları**: Ürünler için varyantlar (boyut, renk vb.), ek seçenek grupları (min/maks seçim kısıtlamaları ve mevcut grupları ekleyebilme), ve alerjen bilgileri (önerilerle) yönetimi.
--   **Gelişmiş Form Validasyonları**: `React Hook Form` ve `Zod` kullanarak karmaşık iç içe form alanları için anlık ve şema tabanlı validasyon. Özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü (hem frontend hem backend tarafında).
+-   **Gelişmiş Form Validasyonları**: `React Hook Form` ve `Zod` kullanarak karmaşık iç içe form alanları için anlık ve şema tabanlı validasyon. Özellikle ürün kodu ve varyant SKU'ları için şirket bazında benzersizlik kontrolü (hem frontend hem backend tarafında async validasyon ile desteklenir).
 -   **Modern Ürün Görseli Yükleme Sistemi**: Figma tasarımından esinlenilmiş, sürükle-bırak özellikli, yükleme ilerlemesi gösteren, anlık önizlemeler sunan ve birden fazla görsel yükleme ile ana görsel seçimi yapma imkanı tanıyan kullanıcı dostu arayüz. Yüklenen görseller backend tarafından otomatik olarak optimize edilir (yeniden boyutlandırma ve WebP dönüşümü).
 -   **Detaylı Ürün Listesi Yönetimi**: Material-React-Table entegrasyonu ile gelişmiş arama, filtreleme, sunucu tabanlı sıralama ve sayfalama, sütun özelleştirme (yeniden sıralama, boyutlandırma, görünürlük, sabitleme) ve kullanıcı ayarlarını kalıcı depolama özellikleri. Yüksek performans için satır ve sütun sanallaştırma desteği.
--   **Soft Delete**: Ürünler ve birçok ana veri modeli için kalıcı silme yerine `deletedAt` alanı ile soft delete mekanizması.
--   **Anlık İstatistik Kartları**: Ürün yönetimi ana sayfasında toplam ürün, aktif ürün ve stok takipli ürün sayılarını gösteren şık dashboard istatistik kartları.
+-   **Soft Delete**: Ürünler ve birçok ana veri modeli için kalıcı silme yerine `deletedAt` alanı ile soft delete mekanizması. Bu sayede veriler kaybolmaz ve gerektiğinde geri yüklenebilir.
+-   **Anlık İstatistik Kartları**: Ürün yönetimi ana sayfasında toplam ürün, aktif ürün ve stok takipli ürün sayılarını gösteren şık dashboard istatistik kartları. Bu istatistikler, seçili şirkete göre filtrelenebilir.
 
 ## 🎯 Gelecek Özellikler
 
@@ -256,7 +255,7 @@ Frontend, `http://localhost:3000` adresindeki backend API'sine `axios` kütüpha
 -   Görsel galerisi yönetimi (yüklenen görsellerin sıralanması, etiketlenmesi veya farklı ürün görselleri arasında geçiş yapma gibi daha gelişmiş özellikler)
 -   Resim optimizasyonu için kullanıcı tarafından yapılandırılabilir daha detaylı ayarlar (kalite, format seçenekleri)
 -   Toplu ürün işlemleri (toplu silme, toplu aktif/pasif yapma vb.)
--   Ürünleri dışa aktarma/içe aktarma fonksiyonları
+-   Ürünleri dışa aktarma/içe aktırma fonksiyonları
 -   Ürün varyantları ve modifikatörler için gerçek stok takibi entegrasyonu (şu an sadece 'affectsStock' alanı mevcut)
 -   Fiyat aralığına göre filtreleme gibi daha spesifik filtreleme seçenekleri
 -   Dark mode desteği
