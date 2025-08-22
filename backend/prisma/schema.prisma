@@ -248,6 +248,7 @@ model Category {
   @@index([companyId])
   @@index([parentId])
   @@index([deletedAt])
+  @@unique([companyId, name])
 }
 
 model Product {

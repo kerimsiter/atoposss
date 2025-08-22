@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import ProductManagement from './pages/ProductManagement';
+import CategoryManagement from './pages/CategoryManagement';
 import { modernTheme } from './theme/modernTheme';
 
 function App(): React.JSX.Element {
@@ -28,6 +29,7 @@ function App(): React.JSX.Element {
           <Routes>
             <Route path="/" element={<Navigate to="/products" replace />} />
             <Route path="/products" element={<ProductManagement />} />
+            <Route path="/categories" element={<CategoryManagement />} />
           </Routes>
         </Router>
       </Box>

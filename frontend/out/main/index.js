@@ -3,6 +3,9 @@ const electron = require("electron");
 const path = require("path");
 const utils = require("@electron-toolkit/utils");
 const icon = path.join(__dirname, "../../resources/icon.png");
+electron.app.setPath("userData", path.join(electron.app.getPath("temp"), "atoposss-userData"));
+electron.app.commandLine.appendSwitch("disable-gpu-shader-disk-cache");
+electron.app.commandLine.appendSwitch("disable-http-cache");
 function createWindow() {
   const mainWindow = new electron.BrowserWindow({
     width: 1400,

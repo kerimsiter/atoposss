@@ -3,6 +3,11 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+// Configure cache/userData to avoid Windows disk cache permission issues in dev
+app.setPath('userData', join(app.getPath('temp'), 'atoposss-userData'))
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+app.commandLine.appendSwitch('disable-http-cache')
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
