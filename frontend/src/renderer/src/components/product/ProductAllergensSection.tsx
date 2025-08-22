@@ -6,7 +6,7 @@ export interface ProductAllergensSectionProps {
   disabled?: boolean
 }
 
-// Common allergen suggestions
+// Common allergen suggestionss
 const ALLERGEN_OPTIONS: string[] = [
   'Gluten',
   'Yumurta',
