@@ -15,11 +15,18 @@ export class UploadService {
   }
 
   validateImageFile(file: Express.Multer.File): void {
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
     if (!allowedMimeTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Only JPEG, PNG, and WebP images are allowed');
+      throw new BadRequestException(
+        'Only JPEG, PNG, and WebP images are allowed',
+      );
     }
 
     if (file.size > maxSize) {
@@ -28,7 +35,12 @@ export class UploadService {
   }
 
   isValidImageFile(mimetype: string): boolean {
-    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+    ];
     return allowedMimeTypes.includes(mimetype);
   }
 
@@ -37,7 +49,10 @@ export class UploadService {
     this.validateImageFile(file);
 
     // Always save as .webp
-    const filename = this.generateFileName(file.originalname).replace(extname(file.originalname), '.webp');
+    const filename = this.generateFileName(file.originalname).replace(
+      extname(file.originalname),
+      '.webp',
+    );
     const outputPath = `${this.uploadPath}/${filename}`;
 
     try {
@@ -47,7 +62,7 @@ export class UploadService {
         .toFile(outputPath);
 
       return this.getFileUrl(filename);
-    } catch (error) {
+    } catch {
       throw new BadRequestException('Resim işlenirken hata oluştu');
     }
   }

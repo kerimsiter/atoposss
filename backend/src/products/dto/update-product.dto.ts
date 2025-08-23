@@ -1,5 +1,10 @@
 import { OmitType, PartialType } from '@nestjs/mapped-types';
-import { CreateProductDto, ModifierGroupInput, ModifierItemInput, ProductVariantInput } from './create-product.dto';
+import {
+  CreateProductDto,
+  ModifierGroupInput,
+  ModifierItemInput,
+  ProductVariantInput,
+} from './create-product.dto';
 import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -9,10 +14,11 @@ export class UpdateProductVariantInput extends ProductVariantInput {
   id?: string;
 }
 
-export class UpdateModifierItemInput extends ModifierItemInput {
-}
+export class UpdateModifierItemInput extends ModifierItemInput {}
 
-export class UpdateModifierGroupInput extends OmitType(ModifierGroupInput, ['items'] as const) {
+export class UpdateModifierGroupInput extends OmitType(ModifierGroupInput, [
+  'items',
+] as const) {
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -21,7 +27,7 @@ export class UpdateModifierGroupInput extends OmitType(ModifierGroupInput, ['ite
 }
 
 export class UpdateProductDto extends PartialType(
-  OmitType(CreateProductDto, ['variants', 'modifierGroups'] as const)
+  OmitType(CreateProductDto, ['variants', 'modifierGroups'] as const),
 ) {
   @IsOptional()
   @IsArray()

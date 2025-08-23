@@ -23,11 +23,20 @@ export class UploadController {
     FileInterceptor('image', {
       storage: memoryStorage(),
       fileFilter: (req, file, callback) => {
-        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-        const maxSize = 5 * 1024 * 1024; // 5MB
+        const allowedMimeTypes = [
+          'image/jpeg',
+          'image/jpg',
+          'image/png',
+          'image/webp',
+        ];
 
         if (!allowedMimeTypes.includes(file.mimetype)) {
-          callback(new BadRequestException('Only JPEG, PNG, and WebP images are allowed'), false);
+          callback(
+            new BadRequestException(
+              'Only JPEG, PNG, and WebP images are allowed',
+            ),
+            false,
+          );
           return;
         }
 

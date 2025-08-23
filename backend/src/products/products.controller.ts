@@ -38,7 +38,11 @@ export class ProductsController {
     @Query('companyId') companyId: string,
     @Query('currentProductId') currentProductId?: string,
   ) {
-    const isUnique = await this.productsService.isCodeUnique(code, companyId, currentProductId);
+    const isUnique = await this.productsService.isCodeUnique(
+      code,
+      companyId,
+      currentProductId,
+    );
     return { isUnique };
   }
 

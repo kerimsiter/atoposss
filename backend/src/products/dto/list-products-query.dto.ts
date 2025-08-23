@@ -3,8 +3,8 @@ import { Transform } from 'class-transformer';
 
 export class ListProductsQueryDto {
   @IsOptional()
-  @Transform(({ value }) => {
-    const v = parseInt(value, 10);
+  @Transform(({ value }: { value: unknown }) => {
+    const v = parseInt(String(value), 10);
     return Number.isNaN(v) || v < 1 ? 1 : v;
   })
   @IsInt()
@@ -12,8 +12,8 @@ export class ListProductsQueryDto {
   page?: number = 1;
 
   @IsOptional()
-  @Transform(({ value }) => {
-    const v = parseInt(value, 10);
+  @Transform(({ value }: { value: unknown }) => {
+    const v = parseInt(String(value), 10);
     if (Number.isNaN(v)) return 20;
     if (v < 1) return 1;
     if (v > 100) return 100; // upper bound
@@ -28,11 +28,23 @@ export class ListProductsQueryDto {
   search?: string;
 
   @IsOptional()
-  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : undefined))
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : undefined,
+  )
   active?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => (value === 'true' || value === true ? true : value === 'false' || value === false ? false : undefined))
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' || value === true
+      ? true
+      : value === 'false' || value === false
+        ? false
+        : undefined,
+  )
   trackStock?: boolean;
 
   @IsOptional()
@@ -45,7 +57,13 @@ export class ListProductsQueryDto {
 
   @IsOptional()
   @IsIn(['name', 'code', 'barcode', 'basePrice', 'createdAt', 'updatedAt'])
-  sortBy?: 'name' | 'code' | 'barcode' | 'basePrice' | 'createdAt' | 'updatedAt' = 'createdAt';
+  sortBy?:
+    | 'name'
+    | 'code'
+    | 'barcode'
+    | 'basePrice'
+    | 'createdAt'
+    | 'updatedAt' = 'createdAt';
 
   @IsOptional()
   @IsIn(['asc', 'desc'])

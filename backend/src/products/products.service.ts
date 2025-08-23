@@ -1,7 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+import {
+  CreateProductDto,
+  ModifierGroupInput,
+  ModifierItemInput,
+} from './dto/create-product.dto';
+import {
+  UpdateProductDto,
+  UpdateModifierGroupInput,
+  UpdateModifierItemInput,
+  UpdateProductVariantInput,
+} from './dto/update-product.dto';
 import { Prisma } from '@prisma/client';
 import { ListProductsQueryDto } from './dto/list-products-query.dto';
 
@@ -12,28 +26,32 @@ export class ProductsService {
   async create(createProductDto: CreateProductDto) {
     // Get companyId from DTO or find the first available company
     let companyId = createProductDto.companyId;
-    
+
     if (!companyId) {
       const firstCompany = await this.prisma.company.findFirst({
-        where: { deletedAt: null }
+        where: { deletedAt: null },
       });
-      
+
       if (!firstCompany) {
-        throw new BadRequestException('No company found. Please create a company first.');
+        throw new BadRequestException(
+          'No company found. Please create a company first.',
+        );
       }
-      
+
       companyId = firstCompany.id;
     } else {
       // Verify that the provided company exists and is active
       const company = await this.prisma.company.findUnique({
-        where: { id: companyId, deletedAt: null }
+        where: { id: companyId, deletedAt: null },
       });
-      
+
       if (!company) {
-        throw new NotFoundException(`Company with ID ${companyId} not found or inactive.`);
+        throw new NotFoundException(
+          `Company with ID ${companyId} not found or inactive.`,
+        );
       }
     }
-    
+
     const data: Prisma.ProductCreateInput = {
       company: { connect: { id: companyId } },
       category: { connect: { id: createProductDto.categoryId } },
@@ -45,7 +63,9 @@ export class ProductsService {
       basePrice: new Prisma.Decimal(createProductDto.basePrice),
       trackStock: createProductDto.trackStock,
       unit: createProductDto.unit,
-      criticalStock: createProductDto.criticalStock ? new Prisma.Decimal(createProductDto.criticalStock) : null,
+      criticalStock: createProductDto.criticalStock
+        ? new Prisma.Decimal(createProductDto.criticalStock)
+        : null,
       available: createProductDto.available ?? true,
       sellable: createProductDto.sellable ?? true,
       showInMenu: createProductDto.showInMenu ?? true,
@@ -62,13 +82,13 @@ export class ProductsService {
     // Optional nested create for variants
     if (createProductDto.variants?.length) {
       data.variants = {
-        create: createProductDto.variants.map(v => ({
+        create: createProductDto.variants.map((v) => ({
           name: v.name,
           code: v.sku ?? v.name, // fallback simple code
           sku: v.sku ?? null,
           price: new Prisma.Decimal(v.price),
           active: true,
-        }))
+        })),
       };
     }
 
@@ -77,63 +97,73 @@ export class ProductsService {
     if (createProductDto.modifierGroups?.length) {
       data.modifierGroups = {
         create: await Promise.all(
-          createProductDto.modifierGroups.map(async (g, idx) => {
-            const anyG: any = g as any;
-            const incomingId: string | undefined = anyG.id;
+          createProductDto.modifierGroups.map(
+            async (g: ModifierGroupInput & { id?: string }, idx) => {
+              const incomingId: string | undefined = g.id;
 
-            if (incomingId) {
-              const exists = await this.prisma.modifierGroup.findUnique({ where: { id: incomingId } });
-              if (exists) {
-                return {
-                  displayOrder: idx,
-                  modifierGroup: { connect: { id: incomingId } },
-                } as any;
-              }
-            }
-
-            return {
-              displayOrder: idx,
-              modifierGroup: {
-                create: {
-                  name: g.name,
-                  minSelection: g.minSelect ?? 0,
-                  maxSelection: g.maxSelect ?? 1,
-                  required: (g.minSelect ?? 0) > 0,
-                  freeSelection: 0,
-                  active: true,
-                  modifiers: g.items?.length
-                    ? {
-                        create: g.items.map((i, ii) => ({
-                          name: i.name,
-                          price: new Prisma.Decimal(i.price ?? 0),
-                          maxQuantity: 1,
-                          displayOrder: ii,
-                          active: true,
-                        }))
-                      }
-                    : undefined,
+              if (incomingId) {
+                const exists = await this.prisma.modifierGroup.findUnique({
+                  where: { id: incomingId },
+                });
+                if (exists) {
+                  return {
+                    displayOrder: idx,
+                    modifierGroup: { connect: { id: incomingId } },
+                  };
                 }
               }
-            } as any;
-          })
-        )
-      } as any; // Prisma typing for nested create on join
+
+              return {
+                displayOrder: idx,
+                modifierGroup: {
+                  create: {
+                    name: g.name,
+                    minSelection: g.minSelect ?? 0,
+                    maxSelection: g.maxSelect ?? 1,
+                    required: (g.minSelect ?? 0) > 0,
+                    freeSelection: 0,
+                    active: true,
+                    modifiers: g.items?.length
+                      ? {
+                          create: g.items.map((i: ModifierItemInput, ii) => ({
+                            name: i.name,
+                            price: new Prisma.Decimal(i.price ?? 0),
+                            maxQuantity: 1,
+                            displayOrder: ii,
+                            active: true,
+                          })),
+                        }
+                      : undefined,
+                  },
+                },
+              };
+            },
+          ),
+        ),
+      }; // Proper typing inferred by Prisma Client
     }
 
     try {
-      return await this.prisma.product.create({ 
+      return await this.prisma.product.create({
         data,
         include: {
           category: true,
           tax: true,
           company: true,
           variants: true,
-          modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
-        }
+          modifierGroups: {
+            include: { modifierGroup: { include: { modifiers: true } } },
+          },
+        },
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Prisma unique constraint
-      if (e?.code === 'P2002') {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as Record<string, unknown>).code === 'P2002'
+      ) {
         // likely unique(companyId, code)
         throw new ConflictException('Product code must be unique per company.');
       }
@@ -202,7 +232,7 @@ export class ProductsService {
               price: true,
               active: true,
               displayOrder: true,
-            }
+            },
           },
           modifierGroups: {
             include: {
@@ -223,12 +253,12 @@ export class ProductsService {
                       price: true,
                       active: true,
                       displayOrder: true,
-                    }
-                  }
-                }
-              }
-            }
-          }
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
         orderBy: { [sortBy]: order },
         skip: (page - 1) * pageSize,
@@ -241,17 +271,19 @@ export class ProductsService {
   }
 
   async findOne(id: string) {
-    const product = await this.prisma.product.findUnique({ 
-      where: { 
+    const product = await this.prisma.product.findUnique({
+      where: {
         id,
-        deletedAt: null
+        deletedAt: null,
       },
       include: {
         category: true,
         tax: true,
         company: true,
         variants: true,
-        modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+        modifierGroups: {
+          include: { modifierGroup: { include: { modifiers: true } } },
+        },
       },
     });
 
@@ -265,7 +297,7 @@ export class ProductsService {
   async update(id: string, updateProductDto: UpdateProductDto) {
     // First check if product exists
     const existingProduct = await this.prisma.product.findUnique({
-      where: { id, deletedAt: null }
+      where: { id, deletedAt: null },
     });
 
     if (!existingProduct) {
@@ -273,17 +305,19 @@ export class ProductsService {
     }
 
     const data: Prisma.ProductUpdateInput = {};
-    
+
     if (updateProductDto.companyId) {
       // Verify that the company exists and is active
       const company = await this.prisma.company.findUnique({
-        where: { id: updateProductDto.companyId, deletedAt: null }
+        where: { id: updateProductDto.companyId, deletedAt: null },
       });
-      
+
       if (!company) {
-        throw new NotFoundException(`Company with ID ${updateProductDto.companyId} not found or inactive.`);
+        throw new NotFoundException(
+          `Company with ID ${updateProductDto.companyId} not found or inactive.`,
+        );
       }
-      
+
       data.company = { connect: { id: updateProductDto.companyId } };
     }
     if (updateProductDto.categoryId) {
@@ -314,7 +348,9 @@ export class ProductsService {
       data.unit = updateProductDto.unit;
     }
     if (updateProductDto.criticalStock !== undefined) {
-      data.criticalStock = updateProductDto.criticalStock ? new Prisma.Decimal(updateProductDto.criticalStock) : null;
+      data.criticalStock = updateProductDto.criticalStock
+        ? new Prisma.Decimal(updateProductDto.criticalStock)
+        : null;
     }
     if (updateProductDto.available !== undefined) {
       data.available = updateProductDto.available;
@@ -338,15 +374,15 @@ export class ProductsService {
       data.image = updateProductDto.image;
     }
     if (updateProductDto.images !== undefined) {
-      (data as Prisma.ProductUpdateInput).images = updateProductDto.images;
+      data.images = updateProductDto.images;
     }
 
     // Update flags if variant/modifier arrays explicitly provided
     if (updateProductDto.variants !== undefined) {
-      (data as Prisma.ProductUpdateInput).hasVariants = Boolean(updateProductDto.variants?.length);
+      data.hasVariants = Boolean(updateProductDto.variants?.length);
     }
     if (updateProductDto.modifierGroups !== undefined) {
-      (data as Prisma.ProductUpdateInput).hasModifiers = Boolean(updateProductDto.modifierGroups?.length);
+      data.hasModifiers = Boolean(updateProductDto.modifierGroups?.length);
     }
 
     // Use a transaction to update product and MERGE nested collections if provided
@@ -367,15 +403,20 @@ export class ProductsService {
 
       // 3) MERGE variants if provided (update by id, delete missing, create new)
       if (updateProductDto.variants !== undefined) {
-        const existing = await tx.productVariant.findMany({ where: { productId: id } });
-        const byId: Record<string, typeof existing[number]> = {};
-        for (const ev of existing) byId[ev.id] = ev as any;
+        const existing = await tx.productVariant.findMany({
+          where: { productId: id },
+        });
+        const byId: Record<string, (typeof existing)[number]> = {};
+        for (const ev of existing) byId[ev.id] = ev;
 
-        const incoming = updateProductDto.variants;
+        const incoming = updateProductDto.variants as
+          | UpdateProductVariantInput[]
+          | undefined;
         const keepIds = new Set<string>();
+        const incomingArr = incoming ?? [];
 
-        for (let idx = 0; idx < (incoming?.length ?? 0); idx++) {
-          const v = incoming![idx];
+        for (let idx = 0; idx < incomingArr.length; idx++) {
+          const v = incomingArr[idx];
           if (v.id && byId[v.id]) {
             keepIds.add(v.id);
             await tx.productVariant.update({
@@ -384,10 +425,13 @@ export class ProductsService {
                 name: v.name,
                 code: v.sku ?? v.name,
                 sku: v.sku ?? null,
-                price: v.price !== undefined ? new Prisma.Decimal(v.price as any) : undefined,
+                price:
+                  v.price !== undefined
+                    ? new Prisma.Decimal(v.price)
+                    : undefined,
                 displayOrder: idx,
                 active: true,
-              }
+              },
             });
           } else {
             const created = await tx.productVariant.create({
@@ -396,31 +440,42 @@ export class ProductsService {
                 name: v.name,
                 code: v.sku ?? v.name,
                 sku: v.sku ?? null,
-                price: new Prisma.Decimal(v.price as any),
+                price: new Prisma.Decimal(v.price),
                 displayOrder: idx,
                 active: true,
-              }
+              },
             });
             keepIds.add(created.id);
           }
         }
 
         // delete missing
-        const removeIds = existing.filter(e => !keepIds.has(e.id)).map(e => e.id);
+        const removeIds = existing
+          .filter((e) => !keepIds.has(e.id))
+          .map((e) => e.id);
         if (removeIds.length) {
-          await tx.productVariant.deleteMany({ where: { id: { in: removeIds } } });
+          await tx.productVariant.deleteMany({
+            where: { id: { in: removeIds } },
+          });
         }
       }
 
       // 4) MERGE modifier groups if provided (update/create groups, merge items, manage join table)
       if (updateProductDto.modifierGroups !== undefined) {
         // existing joins
-        const existingJoins = await tx.productModifierGroup.findMany({ where: { productId: id } });
+        const existingJoins = await tx.productModifierGroup.findMany({
+          where: { productId: id },
+        });
         const keepGroupIds = new Set<string>();
 
         for (let idx = 0; idx < updateProductDto.modifierGroups.length; idx++) {
-          const g = updateProductDto.modifierGroups[idx] as any;
-          let groupId = g.id as string | undefined;
+          const g = updateProductDto.modifierGroups[
+            idx
+          ] as UpdateModifierGroupInput & {
+            id?: string;
+            items?: UpdateModifierItemInput[];
+          };
+          let groupId = g.id;
 
           if (groupId) {
             // upsert group by id to avoid P2025
@@ -460,10 +515,14 @@ export class ProductsService {
 
           // Merge modifiers within group if provided
           if (Array.isArray(g.items)) {
-            const existingMods = await tx.modifier.findMany({ where: { groupId } });
+            const existingMods = await tx.modifier.findMany({
+              where: { groupId },
+            });
             const modKeep = new Set<string>();
             for (let ii = 0; ii < g.items.length; ii++) {
-              const i = g.items[ii];
+              const i = g.items[ii] as UpdateModifierItemInput & {
+                id?: string;
+              };
               if (i.id) {
                 const up = await tx.modifier.upsert({
                   where: { id: i.id },
@@ -498,25 +557,41 @@ export class ProductsService {
                 modKeep.add(createdMod.id);
               }
             }
-            const removeModIds = existingMods.filter(m => !modKeep.has(m.id)).map(m => m.id);
+            const removeModIds = existingMods
+              .filter((m) => !modKeep.has(m.id))
+              .map((m) => m.id);
             if (removeModIds.length) {
-              await tx.modifier.deleteMany({ where: { id: { in: removeModIds } } });
+              await tx.modifier.deleteMany({
+                where: { id: { in: removeModIds } },
+              });
             }
           }
 
           // Upsert join with display order
           await tx.productModifierGroup.upsert({
-            where: { productId_modifierGroupId: { productId: id, modifierGroupId: groupId! } },
+            where: {
+              productId_modifierGroupId: {
+                productId: id,
+                modifierGroupId: groupId,
+              },
+            },
             update: { displayOrder: idx },
-            create: { productId: id, modifierGroupId: groupId!, displayOrder: idx },
+            create: {
+              productId: id,
+              modifierGroupId: groupId,
+              displayOrder: idx,
+            },
           });
-          keepGroupIds.add(groupId!);
+          keepGroupIds.add(groupId);
         }
 
         // Remove old joins not present anymore
         const removeJoins = existingJoins
-          .filter(j => !keepGroupIds.has(j.modifierGroupId))
-          .map(j => ({ productId: j.productId, modifierGroupId: j.modifierGroupId }));
+          .filter((j) => !keepGroupIds.has(j.modifierGroupId))
+          .map((j) => ({
+            productId: j.productId,
+            modifierGroupId: j.modifierGroupId,
+          }));
         if (removeJoins.length) {
           for (const key of removeJoins) {
             await tx.productModifierGroup.delete({
@@ -534,12 +609,16 @@ export class ProductsService {
           tax: true,
           company: true,
           variants: true,
-          modifierGroups: { include: { modifierGroup: { include: { modifiers: true } } } },
+          modifierGroups: {
+            include: { modifierGroup: { include: { modifiers: true } } },
+          },
         },
       });
 
       if (!updated) {
-        throw new NotFoundException(`Product with ID ${id} not found after update.`);
+        throw new NotFoundException(
+          `Product with ID ${id} not found after update.`,
+        );
       }
       return updated;
     });
@@ -548,7 +627,7 @@ export class ProductsService {
   async remove(id: string) {
     // Check if product exists
     const existingProduct = await this.prisma.product.findUnique({
-      where: { id, deletedAt: null }
+      where: { id, deletedAt: null },
     });
 
     if (!existingProduct) {
@@ -558,10 +637,10 @@ export class ProductsService {
     // Soft delete instead of hard delete
     return this.prisma.product.update({
       where: { id },
-      data: { 
+      data: {
         deletedAt: new Date(),
-        active: false
-      }
+        active: false,
+      },
     });
   }
 
@@ -571,26 +650,28 @@ export class ProductsService {
       select: {
         id: true,
         name: true,
-        taxNumber: true
+        taxNumber: true,
       },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
   }
 
   async getCategories(companyId?: string) {
-    const whereClause: any = { deletedAt: null, active: true };
-    
-    if (companyId) {
-      whereClause.companyId = companyId;
-    } else {
-      // If no companyId provided, get categories from first available company
+    let effectiveCompanyId = companyId;
+    if (!effectiveCompanyId) {
       const firstCompany = await this.prisma.company.findFirst({
-        where: { deletedAt: null }
+        where: { deletedAt: null },
       });
       if (firstCompany) {
-        whereClause.companyId = firstCompany.id;
+        effectiveCompanyId = firstCompany.id;
       }
     }
+
+    const whereClause: Prisma.CategoryWhereInput = {
+      deletedAt: null,
+      active: true,
+      ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+    };
 
     return this.prisma.category.findMany({
       where: whereClause,
@@ -598,26 +679,28 @@ export class ProductsService {
         id: true,
         name: true,
         description: true,
-        displayOrder: true
+        displayOrder: true,
       },
-      orderBy: { displayOrder: 'asc' }
+      orderBy: { displayOrder: 'asc' },
     });
   }
 
   async getTaxes(companyId?: string) {
-    const whereClause: any = { deletedAt: null, active: true };
-    
-    if (companyId) {
-      whereClause.companyId = companyId;
-    } else {
-      // If no companyId provided, get taxes from first available company
+    let effectiveCompanyId = companyId;
+    if (!effectiveCompanyId) {
       const firstCompany = await this.prisma.company.findFirst({
-        where: { deletedAt: null }
+        where: { deletedAt: null },
       });
       if (firstCompany) {
-        whereClause.companyId = firstCompany.id;
+        effectiveCompanyId = firstCompany.id;
       }
     }
+
+    const whereClause: Prisma.TaxWhereInput = {
+      deletedAt: null,
+      active: true,
+      ...(effectiveCompanyId ? { companyId: effectiveCompanyId } : {}),
+    };
 
     return this.prisma.tax.findMany({
       where: whereClause,
@@ -626,12 +709,9 @@ export class ProductsService {
         name: true,
         rate: true,
         code: true,
-        isDefault: true
+        isDefault: true,
       },
-      orderBy: [
-        { isDefault: 'desc' },
-        { rate: 'asc' }
-      ]
+      orderBy: [{ isDefault: 'desc' }, { rate: 'asc' }],
     });
   }
 
@@ -650,7 +730,11 @@ export class ProductsService {
 
   // Check if a product code is unique within a company. If companyId is not provided,
   // it defaults to the first active company.
-  async isCodeUnique(code: string, companyId?: string, excludeProductId?: string): Promise<boolean> {
+  async isCodeUnique(
+    code: string,
+    companyId?: string,
+    excludeProductId?: string,
+  ): Promise<boolean> {
     let effectiveCompanyId = companyId ?? null;
     if (!effectiveCompanyId || effectiveCompanyId === 'auto') {
       const firstCompany = await this.prisma.company.findFirst({
@@ -668,10 +752,8 @@ export class ProductsService {
       code,
       companyId: effectiveCompanyId,
       deletedAt: null,
+      ...(excludeProductId ? { id: { not: excludeProductId } } : {}),
     };
-    if (excludeProductId) {
-      (whereClause as any).id = { not: excludeProductId };
-    }
 
     const existing = await this.prisma.product.findFirst({
       where: whereClause,
@@ -689,8 +771,12 @@ export class ProductsService {
 
     const [total, active, stockTracked] = await this.prisma.$transaction([
       this.prisma.product.count({ where: whereBase }),
-      this.prisma.product.count({ where: { AND: [whereBase, { active: true }] } }),
-      this.prisma.product.count({ where: { AND: [whereBase, { trackStock: true }] } }),
+      this.prisma.product.count({
+        where: { AND: [whereBase, { active: true }] },
+      }),
+      this.prisma.product.count({
+        where: { AND: [whereBase, { trackStock: true }] },
+      }),
     ]);
 
     return { total, active, stockTracked };

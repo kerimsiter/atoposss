@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -12,8 +16,11 @@ export class CategoriesService {
   async create(createCategoryDto: CreateCategoryDto) {
     let companyId = createCategoryDto.companyId;
     if (!companyId) {
-      const firstCompany = await this.prisma.company.findFirst({ where: { deletedAt: null } });
-      if (!firstCompany) throw new BadRequestException('Sistemde kayıtlı şirket bulunamadı.');
+      const firstCompany = await this.prisma.company.findFirst({
+        where: { deletedAt: null },
+      });
+      if (!firstCompany)
+        throw new BadRequestException('Sistemde kayıtlı şirket bulunamadı.');
       companyId = firstCompany.id;
     }
 
@@ -34,13 +41,20 @@ export class CategoriesService {
       active: createCategoryDto.active,
       displayOrder: createCategoryDto.displayOrder,
       company: { connect: { id: companyId } },
-      parent: createCategoryDto.parentId ? { connect: { id: createCategoryDto.parentId } } : undefined,
+      parent: createCategoryDto.parentId
+        ? { connect: { id: createCategoryDto.parentId } }
+        : undefined,
     };
 
     try {
       return await this.prisma.category.create({ data });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as Record<string, unknown>).code === 'P2002'
+      ) {
         throw new BadRequestException('Aynı adda bir kategori zaten mevcut.');
       }
       throw e;
@@ -48,7 +62,15 @@ export class CategoriesService {
   }
 
   async findAll(query: ListCategoriesQueryDto) {
-    const { page = 1, pageSize = 20, search, sortBy = 'displayOrder', order = 'asc', companyId, active } = query as any;
+    const {
+      page = 1,
+      pageSize = 20,
+      search,
+      sortBy = 'displayOrder',
+      order = 'asc',
+      companyId,
+      active,
+    } = query;
 
     const where: Prisma.CategoryWhereInput = {
       deletedAt: null,
@@ -82,13 +104,19 @@ export class CategoriesService {
       where: { id, deletedAt: null },
       include: { parent: true },
     });
-    if (!category) throw new NotFoundException(`Kategori (ID: ${id}) bulunamadı.`);
+    if (!category)
+      throw new NotFoundException(`Kategori (ID: ${id}) bulunamadı.`);
     return category;
   }
 
   async getParentCategories(companyId?: string) {
     return this.prisma.category.findMany({
-      where: { deletedAt: null, active: true, parentId: null, ...(companyId ? { companyId } : {}) },
+      where: {
+        deletedAt: null,
+        active: true,
+        parentId: null,
+        ...(companyId ? { companyId } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { displayOrder: 'asc' },
     });
@@ -96,16 +124,22 @@ export class CategoriesService {
 
   async update(id: string, updateCategoryDto: UpdateCategoryDto) {
     await this.findOne(id);
-    const { parentId, companyId: _omitCompanyId, ...rest } = updateCategoryDto;
+    const { parentId, companyId: _omit, ...rest } = updateCategoryDto;
     // If name is changing, ensure uniqueness within company
     if (rest.name) {
       const current = await this.prisma.category.findUnique({ where: { id } });
       if (current) {
         const dup = await this.prisma.category.findFirst({
-          where: { companyId: current.companyId, name: rest.name, id: { not: id }, deletedAt: null },
+          where: {
+            companyId: current.companyId,
+            name: rest.name,
+            id: { not: id },
+            deletedAt: null,
+          },
           select: { id: true },
         });
-        if (dup) throw new BadRequestException('Aynı adda bir kategori zaten mevcut.');
+        if (dup)
+          throw new BadRequestException('Aynı adda bir kategori zaten mevcut.');
       }
     }
 
@@ -114,11 +148,21 @@ export class CategoriesService {
         where: { id },
         data: {
           ...rest,
-          parent: parentId !== undefined ? (parentId ? { connect: { id: parentId } } : { disconnect: true }) : undefined,
+          parent:
+            parentId !== undefined
+              ? parentId
+                ? { connect: { id: parentId } }
+                : { disconnect: true }
+              : undefined,
         },
       });
-    } catch (e: any) {
-      if (e?.code === 'P2002') {
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as Record<string, unknown>).code === 'P2002'
+      ) {
         throw new BadRequestException('Aynı adda bir kategori zaten mevcut.');
       }
       throw e;

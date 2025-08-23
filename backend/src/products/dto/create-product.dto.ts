@@ -4,7 +4,6 @@ import {
   IsOptional,
   IsBoolean,
   IsEnum,
-  IsDecimal,
   IsArray,
   ValidateNested,
 } from 'class-validator';
@@ -18,11 +17,10 @@ enum ProductUnit {
   ML = 'ML',
   PORTION = 'PORTION',
   BOX = 'BOX',
-  PACKAGE = 'PACKAGE'
+  PACKAGE = 'PACKAGE',
 }
 
 export class CreateProductDto {
-
   @IsOptional()
   @IsString()
   companyId?: string; // Optional - will use first available company if not provided

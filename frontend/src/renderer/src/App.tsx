@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import ProductManagement from './pages/ProductManagement';
 import CategoryManagement from './pages/CategoryManagement';
+import TaxManagement from './pages/TaxManagement';
 import { modernTheme } from './theme/modernTheme';
 
 function App(): React.JSX.Element {
@@ -30,6 +31,7 @@ function App(): React.JSX.Element {
             <Route path="/" element={<Navigate to="/products" replace />} />
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/categories" element={<CategoryManagement />} />
+            <Route path="/taxes" element={<TaxManagement />} />
           </Routes>
         </Router>
       </Box>
